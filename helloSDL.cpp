@@ -189,7 +189,7 @@ int main(int argc, char const *argv[])
                 bottomViewPort.h = SCREEN_HEIGHT / 2;
                 SDL_RenderSetViewport(gRenderer, &bottomViewPort);
 
-                ``
+                
 
                 // Update screen
                 SDL_RenderPresent(gRenderer);
