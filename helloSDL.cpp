@@ -33,6 +33,7 @@ SDL_Renderer *gRenderer = NULL;
 
 // Current displayed texture
 SDL_Texture *gTexture = NULL;
+SDL_Texture *gOtherTexture = NULL;
 
 bool init()
 {
@@ -115,7 +116,26 @@ SDL_Texture *loadTexture(string path)
 
 bool loadMedia()
 {
-    return true;
+    // Loading success flag
+    bool success = true;
+
+    // Load texture
+    gTexture = loadTexture("images/logo2.png");
+    if (gTexture == NULL)
+    {
+        printf("Failed to load texture image!\n");
+        success = false;
+    }
+
+    gOtherTexture = loadTexture("images/logo.png");
+    if (gOtherTexture == NULL)
+    {
+        printf("Failed to load texture image!\n");
+        success = false;
+    }
+
+    // Nothing to load
+    return success;
 }
 
 void close()
@@ -181,6 +201,17 @@ int main(int argc, char const *argv[])
                 // Render texture to screen
                 SDL_RenderCopy(gRenderer, gTexture, NULL, NULL);
 
+                //Top right viewport
+                SDL_Rect topRightViewport;
+                topRightViewport.x = SCREEN_WIDTH / 2;
+                topRightViewport.y = 0;
+                topRightViewport.w = SCREEN_WIDTH / 2;
+                topRightViewport.h = SCREEN_HEIGHT / 2;
+                SDL_RenderSetViewport(gRenderer, &topRightViewport);
+
+                //Render texture to screen
+                SDL_RenderCopy(gRenderer, gOtherTexture, NULL, NULL);
+
                 // Bottom viewport
                 SDL_Rect bottomViewPort;
                 bottomViewPort.x = 0;
@@ -189,7 +220,8 @@ int main(int argc, char const *argv[])
                 bottomViewPort.h = SCREEN_HEIGHT / 2;
                 SDL_RenderSetViewport(gRenderer, &bottomViewPort);
 
-                
+                // Render texture to screen
+                SDL_RenderCopy(gRenderer, gTexture, NULL, NULL);
 
                 // Update screen
                 SDL_RenderPresent(gRenderer);
