@@ -13,6 +13,38 @@ using namespace std;
 const int SCREEN_WIDTH = 640;
 const int SCREEN_HEIGHT = 480;
 
+// Texture Wrapper Class
+class TextureWrapper
+{
+public:
+    // Initializes variables
+    TextureWrapper();
+
+    // Deallocates Memory
+    ~TextureWrapper();
+
+    // Loads image at specified path
+    bool loadFromFile(string path);
+
+    // Deallocates texture
+    void free();
+
+    // Render texture at given point
+    void render(int x, int y);
+
+    // Get image dimensions
+    int getWidth();
+    int getHeight();
+
+private:
+    // The actual hardware texture
+    SDL_Texture *texture;
+
+    // Image dimension
+    int width;
+    int height;
+};
+
 // Starts up SDL and create window
 bool init();
 
@@ -35,6 +67,96 @@ SDL_Renderer *gRenderer = NULL;
 SDL_Texture *gTexture = NULL;
 SDL_Texture *gOtherTexture = NULL;
 
+// Scene Texture
+TextureWrapper gPlayerTexture;
+TextureWrapper gBackgroundTexture;
+
+TextureWrapper::TextureWrapper()
+{
+    // Initialize
+    texture = NULL;
+    width = 0;
+    height = 0;
+}
+
+TextureWrapper::~TextureWrapper()
+{
+    // Deallocate
+    free();
+}
+
+bool TextureWrapper::loadFromFile(string path)
+{
+    // Get rid of preexisting texture
+    free();
+
+    // The final texture
+    SDL_Texture *newTexture = NULL;
+
+    // Load image at specified path
+    SDL_Surface *loadedSuface = IMG_Load(path.c_str());
+    if (loadedSuface == NULL)
+    {
+        printf("TEXTURE WRAPPER SDL_IMAGE [FAILED] - %s\n", SDL_GetError());
+    }
+    else
+    {
+        // Color key image
+        SDL_SetColorKey(loadedSuface, SDL_TRUE, SDL_MapRGB(loadedSuface->format, 0, 0xFF, 0xFF));
+
+        // Create texture from surface pixels
+        newTexture = SDL_CreateTextureFromSurface(gRenderer, loadedSuface);
+        if (newTexture == NULL)
+        {
+            printf("TEXTURE WRAPPER LOAD IMAGE [FAILED] - %s | SDL_IMAGE ERROR: %s\n", path.c_str(), IMG_GetError());
+        }
+        else
+        {
+            // Get image dimensions
+            width = loadedSuface->w;
+            height = loadedSuface->h;
+        }
+        // Get rid of old loaded surface
+        SDL_FreeSurface(loadedSuface);
+    }
+    // Return success
+    texture = newTexture;
+    return texture != NULL;
+}
+
+void TextureWrapper::free()
+{
+    // Free texture if it exists
+    if (texture != NULL)
+    {
+        SDL_DestroyTexture(texture);
+        texture = NULL;
+        width = 0;
+        height = 0;
+    }
+}
+
+void TextureWrapper::render(int x, int y)
+{
+    // Set Rendering space and render to screen
+    SDL_Rect renderQuad = {
+        x,
+        y,
+        width,
+        height};
+    SDL_RenderCopy(gRenderer, texture, NULL, &renderQuad);
+}
+
+int TextureWrapper::getWidth()
+{
+    return width;
+}
+
+int TextureWrapper::getHeight()
+{
+    return height;
+}
+
 bool init()
 {
     // Initialization flag
@@ -55,7 +177,7 @@ bool init()
         }
 
         // Create window
-        gWindow = SDL_CreateWindow("SDL Tutorial IX", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
+        gWindow = SDL_CreateWindow("SDL Tutorial X", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
 
         if (gWindow == NULL)
         {
@@ -119,27 +241,26 @@ bool loadMedia()
     // Loading success flag
     bool success = true;
 
-    // Load texture
-    gTexture = loadTexture("images/logo2.png");
-    if (gTexture == NULL)
+    // Load Player texture
+    if (!gPlayerTexture.loadFromFile("images/player.png"))
     {
-        printf("Failed to load texture image!\n");
+        printf("Player Texture [FAILED]!\n");
         success = false;
     }
 
-    gOtherTexture = loadTexture("images/logo.png");
-    if (gOtherTexture == NULL)
+    if (!gBackgroundTexture.loadFromFile("images/background.png"))
     {
-        printf("Failed to load texture image!\n");
-        success = false;
+        printf("Failed to load background texture image!\n");
     }
-
-    // Nothing to load
     return success;
 }
 
 void close()
 {
+    // Free loaded images
+    gPlayerTexture.free();
+    gBackgroundTexture.free();
+
     // Destory window
     SDL_DestroyWindow(gWindow);
     SDL_DestroyRenderer(gRenderer);
@@ -190,38 +311,11 @@ int main(int argc, char const *argv[])
                 SDL_SetRenderDrawColor(gRenderer, 0xFF, 0xFF, 0xFF, 0xFF);
                 SDL_RenderClear(gRenderer);
 
-                // Top Left Corner Viewport
-                SDL_Rect topLeftViewPort;
-                topLeftViewPort.x = 0;
-                topLeftViewPort.y = 0;
-                topLeftViewPort.w = SCREEN_WIDTH / 2;
-                topLeftViewPort.h = SCREEN_HEIGHT / 2;
-                SDL_RenderSetViewport(gRenderer, &topLeftViewPort);
+                // Render background texture
+                gBackgroundTexture.render(0, 0);
 
-                // Render texture to screen
-                SDL_RenderCopy(gRenderer, gTexture, NULL, NULL);
-
-                //Top right viewport
-                SDL_Rect topRightViewport;
-                topRightViewport.x = SCREEN_WIDTH / 2;
-                topRightViewport.y = 0;
-                topRightViewport.w = SCREEN_WIDTH / 2;
-                topRightViewport.h = SCREEN_HEIGHT / 2;
-                SDL_RenderSetViewport(gRenderer, &topRightViewport);
-
-                //Render texture to screen
-                SDL_RenderCopy(gRenderer, gOtherTexture, NULL, NULL);
-
-                // Bottom viewport
-                SDL_Rect bottomViewPort;
-                bottomViewPort.x = 0;
-                bottomViewPort.y = SCREEN_HEIGHT / 2;
-                bottomViewPort.w = SCREEN_WIDTH;
-                bottomViewPort.h = SCREEN_HEIGHT / 2;
-                SDL_RenderSetViewport(gRenderer, &bottomViewPort);
-
-                // Render texture to screen
-                SDL_RenderCopy(gRenderer, gTexture, NULL, NULL);
+                // Render player to screen
+                gPlayerTexture.render(240, 190);
 
                 // Update screen
                 SDL_RenderPresent(gRenderer);
