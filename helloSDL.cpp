@@ -17,7 +17,7 @@ const int SCREEN_HEIGHT = 480;
 class TextureWrapper
 {
 public:
-    // Initializes variables
+    // Initializes variables`
     TextureWrapper();
 
     // Deallocates Memory
@@ -30,7 +30,7 @@ public:
     void free();
 
     // Render texture at given point
-    void render(int x, int y);
+    void render(int x, int y, SDL_Rect *clip = NULL);
 
     // Get image dimensions
     int getWidth();
@@ -70,6 +70,10 @@ SDL_Texture *gOtherTexture = NULL;
 // Scene Texture
 TextureWrapper gPlayerTexture;
 TextureWrapper gBackgroundTexture;
+
+// Scene sprites
+SDL_Rect gSpriteClips[4];
+TextureWrapper gSpriteSheetTexture;
 
 TextureWrapper::TextureWrapper()
 {
@@ -136,7 +140,7 @@ void TextureWrapper::free()
     }
 }
 
-void TextureWrapper::render(int x, int y)
+void TextureWrapper::render(int x, int y, SDL_Rect *clip)
 {
     // Set Rendering space and render to screen
     SDL_Rect renderQuad = {
@@ -144,7 +148,16 @@ void TextureWrapper::render(int x, int y)
         y,
         width,
         height};
-    SDL_RenderCopy(gRenderer, texture, NULL, &renderQuad);
+
+    // Set clip rendering dimension
+    if (clip != NULL)
+    {
+        renderQuad.w = clip->w;
+        renderQuad.h = clip->h;
+    }
+ 
+    // Render to screen
+    SDL_RenderCopy(gRenderer, texture, clip, &renderQuad);
 }
 
 int TextureWrapper::getWidth()
@@ -177,7 +190,7 @@ bool init()
         }
 
         // Create window
-        gWindow = SDL_CreateWindow("SDL Tutorial X", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
+        gWindow = SDL_CreateWindow("SDL Tutorial XI", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
 
         if (gWindow == NULL)
         {
@@ -242,15 +255,36 @@ bool loadMedia()
     bool success = true;
 
     // Load Player texture
-    if (!gPlayerTexture.loadFromFile("images/player.png"))
+    if (!gSpriteSheetTexture.loadFromFile("images/spriteSheet.png"))
     {
-        printf("Player Texture [FAILED]!\n");
+        printf("Sprite Sheet [FAILED]!\n");
         success = false;
     }
-
-    if (!gBackgroundTexture.loadFromFile("images/background.png"))
+    else
     {
-        printf("Failed to load background texture image!\n");
+        // Set top left sprite
+        gSpriteClips[0].x = 0;
+        gSpriteClips[0].y = 0;
+        gSpriteClips[0].w = 100;
+        gSpriteClips[0].h = 100;
+
+        // Set top right sprite
+        gSpriteClips[1].x = 100;
+        gSpriteClips[1].y = 0;
+        gSpriteClips[1].w = 100;
+        gSpriteClips[1].h = 100;
+
+        // Set bottom left sprite
+        gSpriteClips[2].x = 0;
+        gSpriteClips[2].y = 100;
+        gSpriteClips[2].w = 100;
+        gSpriteClips[2].h = 100;
+
+        // Set bottom right sprite
+        gSpriteClips[3].x = 100;
+        gSpriteClips[3].y = 100;
+        gSpriteClips[3].w = 100;
+        gSpriteClips[3].h = 100;
     }
     return success;
 }
@@ -307,15 +341,21 @@ int main(int argc, char const *argv[])
                     }
                 }
 
-                //Clear screen
+                // Clear screen
                 SDL_SetRenderDrawColor(gRenderer, 0xFF, 0xFF, 0xFF, 0xFF);
                 SDL_RenderClear(gRenderer);
 
-                // Render background texture
-                gBackgroundTexture.render(0, 0);
+                //Render top left sprite
+                gSpriteSheetTexture.render(0, 0, &gSpriteClips[0]);
 
-                // Render player to screen
-                gPlayerTexture.render(240, 190);
+                //Render top right sprite
+                gSpriteSheetTexture.render(SCREEN_WIDTH - gSpriteClips[1].w, 0, &gSpriteClips[1]);
+
+                //Render bottom left sprite
+                gSpriteSheetTexture.render(0, SCREEN_HEIGHT - gSpriteClips[2].h, &gSpriteClips[2]);
+
+                //Render bottom right sprite
+                gSpriteSheetTexture.render(SCREEN_WIDTH - gSpriteClips[3].w, SCREEN_HEIGHT - gSpriteClips[3].h, &gSpriteClips[3]);
 
                 // Update screen
                 SDL_RenderPresent(gRenderer);
@@ -325,5 +365,3 @@ int main(int argc, char const *argv[])
     close();
     return 0;
 }
-
-// Git Hub test
