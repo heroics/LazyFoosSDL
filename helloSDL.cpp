@@ -17,7 +17,7 @@ const int SCREEN_HEIGHT = 480;
 class TextureWrapper
 {
 public:
-    // Initializes variables`
+    // Initializes variables
     TextureWrapper();
 
     // Deallocates Memory
@@ -28,6 +28,9 @@ public:
 
     // Deallocates texture
     void free();
+
+    // Set color modulation
+    void setColor(Uint8 red, Uint8 green, Uint8 blue);
 
     // Render texture at given point
     void render(int x, int y, SDL_Rect *clip = NULL);
@@ -68,12 +71,7 @@ SDL_Texture *gTexture = NULL;
 SDL_Texture *gOtherTexture = NULL;
 
 // Scene Texture
-TextureWrapper gPlayerTexture;
-TextureWrapper gBackgroundTexture;
-
-// Scene sprites
-SDL_Rect gSpriteClips[4];
-TextureWrapper gSpriteSheetTexture;
+TextureWrapper gModulationTexture;
 
 TextureWrapper::TextureWrapper()
 {
@@ -155,9 +153,15 @@ void TextureWrapper::render(int x, int y, SDL_Rect *clip)
         renderQuad.w = clip->w;
         renderQuad.h = clip->h;
     }
- 
+
     // Render to screen
     SDL_RenderCopy(gRenderer, texture, clip, &renderQuad);
+}
+
+void TextureWrapper::setColor(Uint8 red, Uint8 green, Uint8 blue)
+{
+    // Modulate Texture
+    SDL_SetTextureColorMod(texture, red, green, blue);
 }
 
 int TextureWrapper::getWidth()
@@ -190,7 +194,7 @@ bool init()
         }
 
         // Create window
-        gWindow = SDL_CreateWindow("SDL Tutorial XI", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
+        gWindow = SDL_CreateWindow("SDL Tutorial XII", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
 
         if (gWindow == NULL)
         {
@@ -255,45 +259,16 @@ bool loadMedia()
     bool success = true;
 
     // Load Player texture
-    if (!gSpriteSheetTexture.loadFromFile("images/spriteSheet.png"))
+    if (!gModulationTexture.loadFromFile("images/colorsheet.png"))
     {
         printf("Sprite Sheet [FAILED]!\n");
         success = false;
-    }
-    else
-    {
-        // Set top left sprite
-        gSpriteClips[0].x = 0;
-        gSpriteClips[0].y = 0;
-        gSpriteClips[0].w = 100;
-        gSpriteClips[0].h = 100;
-
-        // Set top right sprite
-        gSpriteClips[1].x = 100;
-        gSpriteClips[1].y = 0;
-        gSpriteClips[1].w = 100;
-        gSpriteClips[1].h = 100;
-
-        // Set bottom left sprite
-        gSpriteClips[2].x = 0;
-        gSpriteClips[2].y = 100;
-        gSpriteClips[2].w = 100;
-        gSpriteClips[2].h = 100;
-
-        // Set bottom right sprite
-        gSpriteClips[3].x = 100;
-        gSpriteClips[3].y = 100;
-        gSpriteClips[3].w = 100;
-        gSpriteClips[3].h = 100;
     }
     return success;
 }
 
 void close()
 {
-    // Free loaded images
-    gPlayerTexture.free();
-    gBackgroundTexture.free();
 
     // Destory window
     SDL_DestroyWindow(gWindow);
@@ -328,6 +303,11 @@ int main(int argc, char const *argv[])
             // Event Handler
             SDL_Event eventHandler;
 
+            // Modulation components
+            Uint8 red = 255;
+            Uint8 green = 255;
+            Uint8 blue = 255;
+
             // While application is running
             while (!quit)
             {
@@ -339,23 +319,46 @@ int main(int argc, char const *argv[])
                     {
                         quit = true;
                     }
+                    // On keypress  change RBG Values
+                    else if (eventHandler.type == SDL_KEYDOWN)
+                    {
+                        switch (eventHandler.key.keysym.sym)
+                        {
+                        // Increase red
+                        case SDLK_q:
+                            red += 32;
+                            break;
+                        // Increase green
+                        case SDLK_w:
+                            green += 32;
+                            break;
+                        // Increase blue
+                        case SDLK_e:
+                            blue += 32;
+                            break;
+                        // Decrease red
+                        case SDLK_a:
+                            red -= 32;
+                            break;
+                        // Decrease green
+                        case SDLK_s:
+                            green -= 32;
+                            break;
+                        // Decrease blue
+                        case SDLK_d:
+                            blue -= 32;
+                            break;
+                        }
+                    }
                 }
 
                 // Clear screen
                 SDL_SetRenderDrawColor(gRenderer, 0xFF, 0xFF, 0xFF, 0xFF);
                 SDL_RenderClear(gRenderer);
 
-                //Render top left sprite
-                gSpriteSheetTexture.render(0, 0, &gSpriteClips[0]);
-
-                //Render top right sprite
-                gSpriteSheetTexture.render(SCREEN_WIDTH - gSpriteClips[1].w, 0, &gSpriteClips[1]);
-
-                //Render bottom left sprite
-                gSpriteSheetTexture.render(0, SCREEN_HEIGHT - gSpriteClips[2].h, &gSpriteClips[2]);
-
-                //Render bottom right sprite
-                gSpriteSheetTexture.render(SCREEN_WIDTH - gSpriteClips[3].w, SCREEN_HEIGHT - gSpriteClips[3].h, &gSpriteClips[3]);
+                // Modulate and render texture
+                gModulationTexture.setColor(red, green, blue);
+                gModulationTexture.render(0, 0);
 
                 // Update screen
                 SDL_RenderPresent(gRenderer);
