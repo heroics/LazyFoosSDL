@@ -12,6 +12,16 @@ using namespace std;
 // Screen dimension contants
 const int SCREEN_WIDTH = 640;
 const int SCREEN_HEIGHT = 480;
+const int WALKING_ANIMATION_FRAMES = 4;
+
+// Loads Individual image
+SDL_Surface *loadSurface(string path);
+
+// Rendering Window
+SDL_Window *gWindow = NULL;
+
+// The Window Renderer
+SDL_Renderer *gRenderer = NULL;
 
 // Texture Wrapper Class
 class TextureWrapper
@@ -48,30 +58,9 @@ private:
     int height;
 };
 
-// Starts up SDL and create window
-bool init();
-
-// Load media
-bool loadMedia();
-
-// Frees Media and shuts down SDL
-void close();
-
-// Loads Individual image
-SDL_Surface *loadSurface(string path);
-
-// Rendering Window
-SDL_Window *gWindow = NULL;
-
-// The Window Renderer
-SDL_Renderer *gRenderer = NULL;
-
-// Current displayed texture
-SDL_Texture *gTexture = NULL;
-SDL_Texture *gOtherTexture = NULL;
-
 // Scene Texture
-TextureWrapper gModulationTexture;
+TextureWrapper gSpriteSheetTexture;
+SDL_Rect gSpriteClips[4];
 
 TextureWrapper::TextureWrapper()
 {
@@ -174,6 +163,15 @@ int TextureWrapper::getHeight()
     return height;
 }
 
+// Starts up SDL and create window
+bool init();
+
+// Load media
+bool loadMedia();
+
+// Frees Media and shuts down SDL
+void close();
+
 bool init()
 {
     // Initialization flag
@@ -194,7 +192,7 @@ bool init()
         }
 
         // Create window
-        gWindow = SDL_CreateWindow("SDL Tutorial XII", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
+        gWindow = SDL_CreateWindow("SDL Tutorial XIV", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
 
         if (gWindow == NULL)
         {
@@ -204,7 +202,7 @@ bool init()
         else
         {
             // Create renderer for window
-            gRenderer = SDL_CreateRenderer(gWindow, -1, SDL_RENDERER_ACCELERATED);
+            gRenderer = SDL_CreateRenderer(gWindow, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
             if (gRenderer == NULL)
             {
                 printf("SDL_IMAGE [FAILED] - %s\n", IMG_GetError());
@@ -259,11 +257,35 @@ bool loadMedia()
     bool success = true;
 
     // Load Player texture
-    if (!gModulationTexture.loadFromFile("images/colorsheet.png"))
+    if (!gSpriteSheetTexture.loadFromFile("images/spriteSheet.png"))
     {
         printf("Sprite Sheet [FAILED]!\n");
         success = false;
     }
+    else
+    {
+        // Set sprite clips
+        gSpriteClips[0].x = 0;
+        gSpriteClips[0].y = 0;
+        gSpriteClips[0].w = 64;
+        gSpriteClips[0].h = 205;
+
+        gSpriteClips[1].x = 64;
+        gSpriteClips[1].y = 0;
+        gSpriteClips[1].w = 64;
+        gSpriteClips[1].h = 205;
+
+        gSpriteClips[2].x = 128;
+        gSpriteClips[2].y = 0;
+        gSpriteClips[2].w = 64;
+        gSpriteClips[2].h = 205;
+
+        gSpriteClips[3].x = 196;
+        gSpriteClips[3].y = 0;
+        gSpriteClips[3].w = 64;
+        gSpriteClips[3].h = 205;
+    }
+
     return success;
 }
 
@@ -303,10 +325,8 @@ int main(int argc, char const *argv[])
             // Event Handler
             SDL_Event eventHandler;
 
-            // Modulation components
-            Uint8 red = 255;
-            Uint8 green = 255;
-            Uint8 blue = 255;
+            // Current animation frame
+            int currentFrame = 0;
 
             // While application is running
             while (!quit)
@@ -319,49 +339,26 @@ int main(int argc, char const *argv[])
                     {
                         quit = true;
                     }
-                    // On keypress  change RBG Values
-                    else if (eventHandler.type == SDL_KEYDOWN)
-                    {
-                        switch (eventHandler.key.keysym.sym)
-                        {
-                        // Increase red
-                        case SDLK_q:
-                            red += 32;
-                            break;
-                        // Increase green
-                        case SDLK_w:
-                            green += 32;
-                            break;
-                        // Increase blue
-                        case SDLK_e:
-                            blue += 32;
-                            break;
-                        // Decrease red
-                        case SDLK_a:
-                            red -= 32;
-                            break;
-                        // Decrease green
-                        case SDLK_s:
-                            green -= 32;
-                            break;
-                        // Decrease blue
-                        case SDLK_d:
-                            blue -= 32;
-                            break;
-                        }
-                    }
                 }
 
                 // Clear screen
-                SDL_SetRenderDrawColor(gRenderer, 0xFF, 0xFF, 0xFF, 0xFF);
                 SDL_RenderClear(gRenderer);
 
-                // Modulate and render texture
-                gModulationTexture.setColor(red, green, blue);
-                gModulationTexture.render(0, 0);
+                // Render current frame
+                SDL_Rect *currentClip = &gSpriteClips[currentFrame / 4];
+                gSpriteSheetTexture.render((SCREEN_WIDTH - currentClip->w) / 2, (SCREEN_HEIGHT - currentClip->h) / 2, currentClip);
 
                 // Update screen
                 SDL_RenderPresent(gRenderer);
+
+                // Go to next frame
+                currentFrame++;
+
+                // Cycle animation
+                if ((currentFrame / 4) >= WALKING_ANIMATION_FRAMES)
+                {
+                    currentFrame = 0;
+                }
             }
         }
     }
