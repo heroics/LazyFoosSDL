@@ -172,6 +172,7 @@ bool loadMedia();
 // Frees Media and shuts down SDL
 void close();
 
+// Testing GIT 
 bool init()
 {
     // Initialization flag
