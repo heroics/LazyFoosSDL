@@ -1,11 +1,10 @@
 // Using SDL and Standard IO
 #include <SDL2/SDL.h>
-
 #include <SDL2/SDL_image.h>
-
+#include <SDL2/SDL_ttf.h>
 #include <stdio.h>
-
 #include <string>
+#include <cmath>
 
 using namespace std;
 
@@ -23,6 +22,9 @@ SDL_Window *gWindow = NULL;
 // The Window Renderer
 SDL_Renderer *gRenderer = NULL;
 
+// Globally used font
+TTF_Font *gFont = NULL;
+
 // Texture Wrapper Class
 class TextureWrapper
 {
@@ -36,14 +38,23 @@ public:
     // Loads image at specified path
     bool loadFromFile(string path);
 
+    // Creates image from font string
+    bool loadFromRenderedText(string textureText, SDL_Color textColor);
+
     // Deallocates texture
     void free();
 
     // Set color modulation
     void setColor(Uint8 red, Uint8 green, Uint8 blue);
 
+    // Set Blending
+    void setBlendMode(SDL_BlendMode blending);
+
+    // Set Alpha Modulation
+    void setAlpha(Uint8 alpha);
+
     // Render texture at given point
-    void render(int x, int y, SDL_Rect *clip = NULL);
+    void render(int x, int y, SDL_Rect *clip = NULL, double angle = 0.0, SDL_Point *center = NULL, SDL_RendererFlip flip = SDL_FLIP_NONE);
 
     // Get image dimensions
     int getWidth();
@@ -58,9 +69,8 @@ private:
     int height;
 };
 
-// Scene Texture
-TextureWrapper gSpriteSheetTexture;
-SDL_Rect gSpriteClips[4];
+// Rendered Texture
+TextureWrapper gTextTexture;
 
 TextureWrapper::TextureWrapper()
 {
@@ -115,6 +125,39 @@ bool TextureWrapper::loadFromFile(string path)
     return texture != NULL;
 }
 
+bool TextureWrapper::loadFromRenderedText(string textureText, SDL_Color textColor)
+{
+    // Get red of preexisting texture
+    free();
+
+    // Render text surface
+    SDL_Surface *textSurface = TTF_RenderText_Blended(gFont, textureText.c_str(), textColor);
+
+    if (textSurface == NULL)
+    {
+        printf("Render Text Surface [FAILED] - %s\n", TTF_GetError());
+    }
+    else
+    {
+        // Create texture from surface pixel
+        texture = SDL_CreateTextureFromSurface(gRenderer, textSurface);
+        if (texture == NULL)
+        {
+            printf("Render Texture Text [FAILED] - %s\n");
+        }
+        else
+        {
+
+            // Get image dimensions
+            width = textSurface->w;
+            height = textSurface->h;
+        }
+        // Get rid of old surface
+        SDL_FreeSurface(textSurface);
+    }
+    return texture != NULL;
+}
+
 void TextureWrapper::free()
 {
     // Free texture if it exists
@@ -127,7 +170,7 @@ void TextureWrapper::free()
     }
 }
 
-void TextureWrapper::render(int x, int y, SDL_Rect *clip)
+void TextureWrapper::render(int x, int y, SDL_Rect *clip, double angle, SDL_Point *center, SDL_RendererFlip rendererFlip)
 {
     // Set Rendering space and render to screen
     SDL_Rect renderQuad = {
@@ -144,7 +187,7 @@ void TextureWrapper::render(int x, int y, SDL_Rect *clip)
     }
 
     // Render to screen
-    SDL_RenderCopy(gRenderer, texture, clip, &renderQuad);
+    SDL_RenderCopyEx(gRenderer, texture, clip, &renderQuad, angle, center, rendererFlip);
 }
 
 void TextureWrapper::setColor(Uint8 red, Uint8 green, Uint8 blue)
@@ -172,7 +215,6 @@ bool loadMedia();
 // Frees Media and shuts down SDL
 void close();
 
-
 bool init()
 {
     // Initialization flag
@@ -193,7 +235,7 @@ bool init()
         }
 
         // Create window
-        gWindow = SDL_CreateWindow("SDL Tutorial XIV", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
+        gWindow = SDL_CreateWindow("SDL Tutorial XVI", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
 
         if (gWindow == NULL)
         {
@@ -218,7 +260,14 @@ bool init()
                 int imgFlags = IMG_INIT_PNG;
                 if (!(IMG_Init(imgFlags) & imgFlags))
                 {
-                    printf("SDL_image [FAILED] - %s", IMG_GetError());
+                    printf("SDL_image [FAILED] - %s\n", IMG_GetError());
+                    success = false;
+                }
+
+                // Initialize SDL_TTF =
+                if (TTF_Init() == -1)
+                {
+                    printf("SDL_TTF [FAILED] - %s\n", TTF_GetError());
                     success = false;
                 }
             }
@@ -244,7 +293,7 @@ SDL_Texture *loadTexture(string path)
         newTexture = SDL_CreateTextureFromSurface(gRenderer, loadedSurface);
         if (newTexture == NULL)
         {
-            printf("Image Optimization: %s [FAILED] - %s ", path.c_str(), SDL_GetError());
+            printf("Image Optimization: %s [FAILED] - %s\n", path.c_str(), SDL_GetError());
         }
         // Free old surface
         SDL_FreeSurface(loadedSurface);
@@ -257,34 +306,22 @@ bool loadMedia()
     // Loading success flag
     bool success = true;
 
-    // Load Player texture
-    if (!gSpriteSheetTexture.loadFromFile("images/spriteSheet.png"))
+    // Open the Font
+    gFont = TTF_OpenFont("fonts/gamefont.ttf", 28);
+
+    if (gFont == NULL)
     {
-        printf("Sprite Sheet [FAILED]!\n");
-        success = false;
+        printf("Font Load [FAILED] - %s\n", TTF_GetError());
     }
     else
     {
-        // Set sprite clips
-        gSpriteClips[0].x = 0;
-        gSpriteClips[0].y = 0;
-        gSpriteClips[0].w = 64;
-        gSpriteClips[0].h = 205;
-
-        gSpriteClips[1].x = 64;
-        gSpriteClips[1].y = 0;
-        gSpriteClips[1].w = 64;
-        gSpriteClips[1].h = 205;
-
-        gSpriteClips[2].x = 128;
-        gSpriteClips[2].y = 0;
-        gSpriteClips[2].w = 64;
-        gSpriteClips[2].h = 205;
-
-        gSpriteClips[3].x = 196;
-        gSpriteClips[3].y = 0;
-        gSpriteClips[3].w = 64;
-        gSpriteClips[3].h = 205;
+        // Render Text
+        SDL_Color textColor = {0, 0, 0};
+        if (!gTextTexture.loadFromRenderedText("You are here because you want to be.", textColor))
+        {
+            printf("Text Render [FAILED]");
+            success = false;
+        }
     }
 
     return success;
@@ -292,14 +329,22 @@ bool loadMedia()
 
 void close()
 {
+    // Free loaded images
+    gTextTexture.free();
+
+    // Free global font
+    TTF_CloseFont(gFont);
+    gFont = NULL;
 
     // Destory window
     SDL_DestroyWindow(gWindow);
     SDL_DestroyRenderer(gRenderer);
+
     gRenderer = NULL;
     gWindow = NULL;
 
     // Quit SDL subsystems
+    TTF_Quit();
     IMG_Quit();
     SDL_Quit();
 }
@@ -327,7 +372,10 @@ int main(int argc, char const *argv[])
             SDL_Event eventHandler;
 
             // Current animation frame
-            int currentFrame = 0;
+            double degrees = 0.0;
+
+            // Flip type
+            SDL_RendererFlip flipType = SDL_FLIP_NONE;
 
             // While application is running
             while (!quit)
@@ -343,23 +391,13 @@ int main(int argc, char const *argv[])
                 }
 
                 // Clear screen
+                SDL_SetRenderDrawColor(gRenderer, 0xFF, 0xFF, 0xFF, 0xFF);
                 SDL_RenderClear(gRenderer);
 
                 // Render current frame
-                SDL_Rect *currentClip = &gSpriteClips[currentFrame / 4];
-                gSpriteSheetTexture.render((SCREEN_WIDTH - currentClip->w) / 2, (SCREEN_HEIGHT - currentClip->h) / 2, currentClip);
-
+                gTextTexture.render((SCREEN_WIDTH - gTextTexture.getWidth()) / 2, (SCREEN_HEIGHT - gTextTexture.getHeight()) / 2);
                 // Update screen
                 SDL_RenderPresent(gRenderer);
-
-                // Go to next frame
-                currentFrame++;
-
-                // Cycle animation
-                if ((currentFrame / 4) >= WALKING_ANIMATION_FRAMES)
-                {
-                    currentFrame = 0;
-                }
             }
         }
     }
