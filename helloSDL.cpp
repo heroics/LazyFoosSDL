@@ -1,29 +1,29 @@
 // Using SDL and Standard IO
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
-#include <SDL2/SDL_ttf.h>
+#include <cmath>
 #include <stdio.h>
 #include <string>
-#include <cmath>
 
 using namespace std;
 
 // Screen dimension contants
 const int SCREEN_WIDTH = 640;
 const int SCREEN_HEIGHT = 480;
-const int WALKING_ANIMATION_FRAMES = 4;
 
-// Loads Individual image
-SDL_Surface *loadSurface(string path);
+// Button contantsg
+const int BUTTON_WIDTH = 300;
+const int BUTTON_HEIGHT = 200;
+const int TOTAL_BUTTONS = 4;
 
-// Rendering Window
-SDL_Window *gWindow = NULL;
-
-// The Window Renderer
-SDL_Renderer *gRenderer = NULL;
-
-// Globally used font
-TTF_Font *gFont = NULL;
+enum ButtonSprite
+{
+    BUTTON_SPRITE_MOUSE_OUT = 0,
+    BUTTON_SPRITE_MOUSE_OVER_MOTION = 1,
+    BUTTON_SPRITE_MOUSE_DOWN = 2,
+    BUTTON_SPRITE_MOUSE_UP = 3,
+    BUTTON_SPRITE_MOUSE_TOTAL = 4
+};
 
 // Texture Wrapper Class
 class TextureWrapper
@@ -38,8 +38,10 @@ public:
     // Loads image at specified path
     bool loadFromFile(string path);
 
+#if defined(_SDL_TTF_H) || defined(SDL_TTF_H)
     // Creates image from font string
     bool loadFromRenderedText(string textureText, SDL_Color textColor);
+#endif
 
     // Deallocates texture
     void free();
@@ -69,8 +71,51 @@ private:
     int height;
 };
 
-// Rendered Texture
-TextureWrapper gTextTexture;
+// The mouse Button
+class MouseButton
+{
+public:
+    // Initializes internal variables
+    MouseButton();
+
+    // Sets top left position
+    void setPosition(int x, int y);
+
+    // Handles mouse event
+    void handleEvent(SDL_Event *e);
+
+    // Shows button sprite
+    void render();
+
+private:
+    // Top left position
+    SDL_Point position;
+
+    // Currently used global sprite
+    ButtonSprite currentSprite;
+};
+
+// Starts up SDL and create window
+bool init();
+
+// Load media
+bool loadMedia();
+
+// Frees Media and shuts down SDL
+void close();
+
+// Rendering Window
+SDL_Window *gWindow = NULL;
+
+// The Window Renderer
+SDL_Renderer *gRenderer = NULL;
+
+// Mouse button sprites
+SDL_Rect gSpriteClips[BUTTON_SPRITE_MOUSE_TOTAL];
+TextureWrapper buttonSpriteSheetTexture;
+
+// Button Objects
+MouseButton buttons[TOTAL_BUTTONS];
 
 TextureWrapper::TextureWrapper()
 {
@@ -125,6 +170,7 @@ bool TextureWrapper::loadFromFile(string path)
     return texture != NULL;
 }
 
+#if defined(_SDL_TTF_H) || defined(SDL_TTF_H)
 bool TextureWrapper::loadFromRenderedText(string textureText, SDL_Color textColor)
 {
     // Get red of preexisting texture
@@ -157,6 +203,7 @@ bool TextureWrapper::loadFromRenderedText(string textureText, SDL_Color textColo
     }
     return texture != NULL;
 }
+#endif
 
 void TextureWrapper::free()
 {
@@ -168,6 +215,22 @@ void TextureWrapper::free()
         width = 0;
         height = 0;
     }
+}
+
+void TextureWrapper::setColor(Uint8 red, Uint8 green, Uint8 blue)
+{
+    // Modulate Texture
+    SDL_SetTextureColorMod(texture, red, green, blue);
+}
+void TextureWrapper::setBlendMode(SDL_BlendMode blending)
+{
+    //Set blending function
+    SDL_SetTextureBlendMode(texture, blending);
+}
+
+void TextureWrapper::setAlpha(Uint8 alpha)
+{
+    SDL_SetTextureAlphaMod(texture, alpha);
 }
 
 void TextureWrapper::render(int x, int y, SDL_Rect *clip, double angle, SDL_Point *center, SDL_RendererFlip rendererFlip)
@@ -190,12 +253,6 @@ void TextureWrapper::render(int x, int y, SDL_Rect *clip, double angle, SDL_Poin
     SDL_RenderCopyEx(gRenderer, texture, clip, &renderQuad, angle, center, rendererFlip);
 }
 
-void TextureWrapper::setColor(Uint8 red, Uint8 green, Uint8 blue)
-{
-    // Modulate Texture
-    SDL_SetTextureColorMod(texture, red, green, blue);
-}
-
 int TextureWrapper::getWidth()
 {
     return width;
@@ -206,14 +263,83 @@ int TextureWrapper::getHeight()
     return height;
 }
 
-// Starts up SDL and create window
-bool init();
+MouseButton::MouseButton()
+{
+    position.x = 0;
+    position.y = 0;
 
-// Load media
-bool loadMedia();
+    currentSprite = BUTTON_SPRITE_MOUSE_OUT;
+}
 
-// Frees Media and shuts down SDL
-void close();
+void MouseButton::setPosition(int x, int y)
+{
+    position.x = x;
+    position.y = y;
+}
+
+void MouseButton::handleEvent(SDL_Event *e)
+{
+    // If mouse event happened
+    if (e->type == SDL_MOUSEMOTION || e->type == SDL_MOUSEBUTTONDOWN || e->type == SDL_MOUSEBUTTONUP)
+    {
+        // Get mouse position
+        int x, y;
+        SDL_GetMouseState(&x, &y);
+
+        // Check if mouse is in button
+        bool inside = true;
+
+        // Mouse is left of button
+        if (x < position.x)
+        {
+            inside = false;
+        }
+
+        // Mouse is right of the button
+        else if (x > position.x + BUTTON_WIDTH)
+        {
+            inside = false;
+        }
+        // Mouse above the button
+        else if (y < position.y)
+        {
+            inside = false;
+        }
+        //Mouse below the button
+        else if (y > position.y + BUTTON_HEIGHT)
+        {
+            inside = false;
+        }
+        if (!inside)
+        {
+            currentSprite = BUTTON_SPRITE_MOUSE_OUT;
+        }
+        // Mouse is inside button
+        else
+        {
+            // Set mouse over sprite
+            switch (e->type)
+            {
+            case SDL_MOUSEMOTION:
+                currentSprite = BUTTON_SPRITE_MOUSE_OVER_MOTION;
+                break;
+
+            case SDL_MOUSEBUTTONDOWN:
+                currentSprite = BUTTON_SPRITE_MOUSE_DOWN;
+                break;
+            case SDL_MOUSEBUTTONUP:
+                currentSprite = BUTTON_SPRITE_MOUSE_UP;
+                break;
+            }
+        }
+    }
+}
+
+void MouseButton::render()
+{
+    // Show current button sprite
+    buttonSpriteSheetTexture.render(position.x, position.y, &gSpriteClips[currentSprite]);
+}
 
 bool init()
 {
@@ -235,7 +361,7 @@ bool init()
         }
 
         // Create window
-        gWindow = SDL_CreateWindow("SDL Tutorial XVI", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
+        gWindow = SDL_CreateWindow("SDL Tutorial XVIII", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
 
         if (gWindow == NULL)
         {
@@ -263,42 +389,10 @@ bool init()
                     printf("SDL_image [FAILED] - %s\n", IMG_GetError());
                     success = false;
                 }
-
-                // Initialize SDL_TTF =
-                if (TTF_Init() == -1)
-                {
-                    printf("SDL_TTF [FAILED] - %s\n", TTF_GetError());
-                    success = false;
-                }
             }
         }
     }
     return success;
-}
-
-SDL_Texture *loadTexture(string path)
-{
-    // The final texture
-    SDL_Texture *newTexture = NULL;
-
-    // Load image at specified path
-    SDL_Surface *loadedSurface = IMG_Load(path.c_str());
-    if (loadSurface == NULL)
-    {
-        printf("Load Surface [Failed] - %s\n", SDL_GetError());
-    }
-    else
-    {
-        // Create texture from surface pixels
-        newTexture = SDL_CreateTextureFromSurface(gRenderer, loadedSurface);
-        if (newTexture == NULL)
-        {
-            printf("Image Optimization: %s [FAILED] - %s\n", path.c_str(), SDL_GetError());
-        }
-        // Free old surface
-        SDL_FreeSurface(loadedSurface);
-    }
-    return newTexture;
 }
 
 bool loadMedia()
@@ -306,22 +400,28 @@ bool loadMedia()
     // Loading success flag
     bool success = true;
 
-    // Open the Font
-    gFont = TTF_OpenFont("fonts/gamefont.ttf", 28);
-
-    if (gFont == NULL)
+    // Load sprites
+    if (!buttonSpriteSheetTexture.loadFromFile("images/button.png"))
     {
-        printf("Font Load [FAILED] - %s\n", TTF_GetError());
+        printf("SPRITE LOAD [FAILED]");
+        success = false;
     }
     else
     {
-        // Render Text
-        SDL_Color textColor = {0, 0, 0};
-        if (!gTextTexture.loadFromRenderedText("You are here because you want to be.", textColor))
+        // Set sprite
+        for (int i = 0; i < BUTTON_SPRITE_MOUSE_TOTAL; i++)
         {
-            printf("Text Render [FAILED]");
-            success = false;
+
+            gSpriteClips[i].x = 0;
+            gSpriteClips[i].y = i * 200;
+            gSpriteClips[i].w = BUTTON_WIDTH;
+            gSpriteClips[i].h = BUTTON_HEIGHT;
         }
+        //Set buttons in corners
+        buttons[0].setPosition(0, 0);
+        buttons[1].setPosition(SCREEN_WIDTH - BUTTON_WIDTH, 0);
+        buttons[2].setPosition(0, SCREEN_HEIGHT - BUTTON_HEIGHT);
+        buttons[3].setPosition(SCREEN_WIDTH - BUTTON_WIDTH, SCREEN_HEIGHT - BUTTON_HEIGHT);
     }
 
     return success;
@@ -330,11 +430,7 @@ bool loadMedia()
 void close()
 {
     // Free loaded images
-    gTextTexture.free();
-
-    // Free global font
-    TTF_CloseFont(gFont);
-    gFont = NULL;
+    buttonSpriteSheetTexture.free();
 
     // Destory window
     SDL_DestroyWindow(gWindow);
@@ -344,7 +440,6 @@ void close()
     gWindow = NULL;
 
     // Quit SDL subsystems
-    TTF_Quit();
     IMG_Quit();
     SDL_Quit();
 }
@@ -388,14 +483,24 @@ int main(int argc, char const *argv[])
                     {
                         quit = true;
                     }
+
+                    // Handle Button Events
+                    for (size_t i = 0; i < TOTAL_BUTTONS; i++)
+                    {
+                        buttons[i].handleEvent(&eventHandler);
+                    }
                 }
 
                 // Clear screen
                 SDL_SetRenderDrawColor(gRenderer, 0xFF, 0xFF, 0xFF, 0xFF);
                 SDL_RenderClear(gRenderer);
 
-                // Render current frame
-                gTextTexture.render((SCREEN_WIDTH - gTextTexture.getWidth()) / 2, (SCREEN_HEIGHT - gTextTexture.getHeight()) / 2);
+                // Render Buttons
+                for (size_t i = 0; i < TOTAL_BUTTONS; i++)
+                {
+                    buttons[i].render();
+                }
+
                 // Update screen
                 SDL_RenderPresent(gRenderer);
             }
