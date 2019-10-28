@@ -1,7 +1,7 @@
 // Using SDL and Standard IO
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
-#include <cmath>
+#include <SDL2/SDL_mixer.h>
 #include <stdio.h>
 #include <string>
 
@@ -11,19 +11,9 @@ using namespace std;
 const int SCREEN_WIDTH = 640;
 const int SCREEN_HEIGHT = 480;
 
-// Button contantsg
+// Button contants
 const int BUTTON_WIDTH = 300;
 const int BUTTON_HEIGHT = 200;
-const int TOTAL_BUTTONS = 4;
-
-enum ButtonSprite
-{
-    BUTTON_SPRITE_MOUSE_OUT = 0,
-    BUTTON_SPRITE_MOUSE_OVER_MOTION = 1,
-    BUTTON_SPRITE_MOUSE_DOWN = 2,
-    BUTTON_SPRITE_MOUSE_UP = 3,
-    BUTTON_SPRITE_MOUSE_TOTAL = 4
-};
 
 // Texture Wrapper Class
 class TextureWrapper
@@ -71,30 +61,6 @@ private:
     int height;
 };
 
-// The mouse Button
-class MouseButton
-{
-public:
-    // Initializes internal variables
-    MouseButton();
-
-    // Sets top left position
-    void setPosition(int x, int y);
-
-    // Handles mouse event
-    void handleEvent(SDL_Event *e);
-
-    // Shows button sprite
-    void render();
-
-private:
-    // Top left position
-    SDL_Point position;
-
-    // Currently used global sprite
-    ButtonSprite currentSprite;
-};
-
 // Starts up SDL and create window
 bool init();
 
@@ -110,12 +76,17 @@ SDL_Window *gWindow = NULL;
 // The Window Renderer
 SDL_Renderer *gRenderer = NULL;
 
-// Mouse button sprites
-SDL_Rect gSpriteClips[BUTTON_SPRITE_MOUSE_TOTAL];
-TextureWrapper buttonSpriteSheetTexture;
+//Scene texture
+TextureWrapper gPromptTexture;
 
-// Button Objects
-MouseButton buttons[TOTAL_BUTTONS];
+//The music that will be played
+Mix_Music *gMusic = NULL;
+
+//The sound effects that will be used
+Mix_Chunk *gScratch = NULL;
+Mix_Chunk *gHigh = NULL;
+Mix_Chunk *gMedium = NULL;
+Mix_Chunk *gLow = NULL;
 
 TextureWrapper::TextureWrapper()
 {
@@ -263,91 +234,13 @@ int TextureWrapper::getHeight()
     return height;
 }
 
-MouseButton::MouseButton()
-{
-    position.x = 0;
-    position.y = 0;
-
-    currentSprite = BUTTON_SPRITE_MOUSE_OUT;
-}
-
-void MouseButton::setPosition(int x, int y)
-{
-    position.x = x;
-    position.y = y;
-}
-
-void MouseButton::handleEvent(SDL_Event *e)
-{
-    // If mouse event happened
-    if (e->type == SDL_MOUSEMOTION || e->type == SDL_MOUSEBUTTONDOWN || e->type == SDL_MOUSEBUTTONUP)
-    {
-        // Get mouse position
-        int x, y;
-        SDL_GetMouseState(&x, &y);
-
-        // Check if mouse is in button
-        bool inside = true;
-
-        // Mouse is left of button
-        if (x < position.x)
-        {
-            inside = false;
-        }
-
-        // Mouse is right of the button
-        else if (x > position.x + BUTTON_WIDTH)
-        {
-            inside = false;
-        }
-        // Mouse above the button
-        else if (y < position.y)
-        {
-            inside = false;
-        }
-        //Mouse below the button
-        else if (y > position.y + BUTTON_HEIGHT)
-        {
-            inside = false;
-        }
-        if (!inside)
-        {
-            currentSprite = BUTTON_SPRITE_MOUSE_OUT;
-        }
-        // Mouse is inside button
-        else
-        {
-            // Set mouse over sprite
-            switch (e->type)
-            {
-            case SDL_MOUSEMOTION:
-                currentSprite = BUTTON_SPRITE_MOUSE_OVER_MOTION;
-                break;
-
-            case SDL_MOUSEBUTTONDOWN:
-                currentSprite = BUTTON_SPRITE_MOUSE_DOWN;
-                break;
-            case SDL_MOUSEBUTTONUP:
-                currentSprite = BUTTON_SPRITE_MOUSE_UP;
-                break;
-            }
-        }
-    }
-}
-
-void MouseButton::render()
-{
-    // Show current button sprite
-    buttonSpriteSheetTexture.render(position.x, position.y, &gSpriteClips[currentSprite]);
-}
-
 bool init()
 {
     // Initialization flag
     bool success = true;
 
     // Initialize SDL
-    if (SDL_Init(SDL_INIT_VIDEO) < 0)
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) < 0)
     {
         printf("SDL [FAILED] - %s\n", SDL_GetError());
         success = false;
@@ -361,7 +254,7 @@ bool init()
         }
 
         // Create window
-        gWindow = SDL_CreateWindow("SDL Tutorial XVIII", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
+        gWindow = SDL_CreateWindow("SDL Tutorial XXI", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
 
         if (gWindow == NULL)
         {
@@ -389,6 +282,12 @@ bool init()
                     printf("SDL_image [FAILED] - %s\n", IMG_GetError());
                     success = false;
                 }
+
+                // Initialize SDL_mixer
+                if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0)
+                {
+                    printf("SDL_MIXER [FAILED] - %s\n");
+                }
             }
         }
     }
@@ -401,36 +300,67 @@ bool loadMedia()
     bool success = true;
 
     // Load sprites
-    if (!buttonSpriteSheetTexture.loadFromFile("images/button.png"))
+    if (!gPromptTexture.loadFromFile("images/prompt.png"))
     {
         printf("SPRITE LOAD [FAILED]");
         success = false;
     }
-    else
-    {
-        // Set sprite
-        for (int i = 0; i < BUTTON_SPRITE_MOUSE_TOTAL; i++)
-        {
 
-            gSpriteClips[i].x = 0;
-            gSpriteClips[i].y = i * 200;
-            gSpriteClips[i].w = BUTTON_WIDTH;
-            gSpriteClips[i].h = BUTTON_HEIGHT;
-        }
-        //Set buttons in corners
-        buttons[0].setPosition(0, 0);
-        buttons[1].setPosition(SCREEN_WIDTH - BUTTON_WIDTH, 0);
-        buttons[2].setPosition(0, SCREEN_HEIGHT - BUTTON_HEIGHT);
-        buttons[3].setPosition(SCREEN_WIDTH - BUTTON_WIDTH, SCREEN_HEIGHT - BUTTON_HEIGHT);
+    // Load Music
+    gMusic = Mix_LoadMUS("audio/beat.wav");
+    if (gMusic == NULL)
+    {
+        printf("BEAT [FAILED] - %s\n", Mix_GetError());
+        success = false;
     }
 
+    // Load sound effects
+    gScratch = Mix_LoadWAV("audio/scratch.wav");
+    if (gScratch == NULL)
+    {
+        printf("SCRATCH FAILED [FAILED] - %s\n", Mix_GetError());
+        success = false;
+    }
+
+    gHigh = Mix_LoadWAV("audio/high.wav");
+    if (gHigh == NULL)
+    {
+        printf("HIGH [FAILED] - %s\n");
+        success = false;
+    }
+    gMedium = Mix_LoadWAV("audio/medium.wav");
+    if (gMedium == NULL)
+    {
+        printf("MEDIUM [FAILED] - %s\n");
+        success = false;
+    }
+    gLow = Mix_LoadWAV("audio/low.wav");
+    if (gLow == NULL)
+    {
+        printf("LOW [FAILED] - %s\n");
+        success = false;
+    }
     return success;
 }
 
 void close()
 {
     // Free loaded images
-    buttonSpriteSheetTexture.free();
+    gPromptTexture.free();
+
+    //Free the sound effects
+    Mix_FreeChunk(gScratch);
+    Mix_FreeChunk(gHigh);
+    Mix_FreeChunk(gMedium);
+    Mix_FreeChunk(gLow);
+    gScratch = NULL;
+    gHigh = NULL;
+    gMedium = NULL;
+    gLow = NULL;
+
+    //Free the music
+    Mix_FreeMusic(gMusic);
+    gMusic = NULL;
 
     // Destory window
     SDL_DestroyWindow(gWindow);
@@ -440,6 +370,7 @@ void close()
     gWindow = NULL;
 
     // Quit SDL subsystems
+    Mix_Quit();
     IMG_Quit();
     SDL_Quit();
 }
@@ -466,28 +397,76 @@ int main(int argc, char const *argv[])
             // Event Handler
             SDL_Event eventHandler;
 
-            // Current animation frame
-            double degrees = 0.0;
-
-            // Flip type
-            SDL_RendererFlip flipType = SDL_FLIP_NONE;
+            // Current rendered texture
+            TextureWrapper *currentTexture = NULL;
 
             // While application is running
             while (!quit)
             {
                 // Handle events on queue
+
                 while (SDL_PollEvent(&eventHandler) != 0)
                 {
-                    // User requests quit
+                    //User requests quit
                     if (eventHandler.type == SDL_QUIT)
                     {
                         quit = true;
                     }
-
-                    // Handle Button Events
-                    for (size_t i = 0; i < TOTAL_BUTTONS; i++)
+                    //Handle key press
+                    else if (eventHandler.type == SDL_KEYDOWN)
                     {
-                        buttons[i].handleEvent(&eventHandler);
+                        switch (eventHandler.key.keysym.sym)
+                        {
+                        //Play high sound effect
+                        case SDLK_1:
+                            Mix_PlayChannel(-1, gHigh, 0);
+                            break;
+
+                        //Play medium sound effect
+                        case SDLK_2:
+                            Mix_PlayChannel(-1, gMedium, 0);
+                            break;
+
+                        //Play low sound effect
+                        case SDLK_3:
+                            Mix_PlayChannel(-1, gLow, 0);
+                            break;
+
+                        //Play scratch sound effect
+                        case SDLK_4:
+                            Mix_PlayChannel(-1, gScratch, 0);
+                            break;
+
+                        case SDLK_9:
+                            //If there is no music playing
+                            if (Mix_PlayingMusic() == 0)
+                            {
+                                //Play the music
+                                Mix_PlayMusic(gMusic, -1);
+                            }
+                            //If music is being played
+                            else
+                            {
+                                //If the music is paused
+                                if (Mix_PausedMusic() == 1)
+                                {
+                                    //Resume the music
+                                    Mix_ResumeMusic();
+                                }
+                                //If the music is playing
+                                else
+                                {
+                                    //Pause the music
+                                    Mix_PauseMusic();
+                                }
+                            }
+                            break;
+
+                        case SDLK_0:
+                            //Stop the music
+                            Mix_HaltMusic();
+                            break;
+                        }
                     }
                 }
 
@@ -495,11 +474,8 @@ int main(int argc, char const *argv[])
                 SDL_SetRenderDrawColor(gRenderer, 0xFF, 0xFF, 0xFF, 0xFF);
                 SDL_RenderClear(gRenderer);
 
-                // Render Buttons
-                for (size_t i = 0; i < TOTAL_BUTTONS; i++)
-                {
-                    buttons[i].render();
-                }
+                //Render prompt
+                gPromptTexture.render(0, 0);
 
                 // Update screen
                 SDL_RenderPresent(gRenderer);
