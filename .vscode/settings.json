@@ -1,0 +1,7 @@
+{
+    "terminal.integrated.fontFamily": "'Inconsolata'",
+    "files.associations": {
+        "cstdlib": "cpp",
+        "istream": "cpp"
+    }
+}

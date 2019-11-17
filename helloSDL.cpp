@@ -1,7 +1,8 @@
 // Using SDL and Standard IO
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
-#include <SDL2/SDL_mixer.h>
+#include <SDL2/SDL_ttf.h>
+#include <sstream>
 #include <stdio.h>
 #include <string>
 
@@ -10,10 +11,6 @@ using namespace std;
 // Screen dimension contants
 const int SCREEN_WIDTH = 640;
 const int SCREEN_HEIGHT = 480;
-
-// Button contants
-const int BUTTON_WIDTH = 300;
-const int BUTTON_HEIGHT = 200;
 
 // Texture Wrapper Class
 class TextureWrapper
@@ -61,6 +58,38 @@ private:
     int height;
 };
 
+// The application time based timer
+class Timer
+{
+public:
+    // Initializes variables
+    Timer();
+
+    // Clock Actions
+    void start();
+    void stop();
+    void pause();
+    void unpause();
+
+    // Gets the timer's current time
+    Uint32 getTicks();
+
+    // Checks the status of the timer
+    bool isStarted();
+    bool isPaused();
+
+private:
+    // The clock time when started
+    Uint32 startTicks;
+
+    // The ticks stored when the time timer was paused
+    Uint32 pausedTicks;
+
+    // The timer status
+    bool started;
+    bool paused;
+};
+
 // Starts up SDL and create window
 bool init();
 
@@ -77,16 +106,11 @@ SDL_Window *gWindow = NULL;
 SDL_Renderer *gRenderer = NULL;
 
 //Scene texture
-TextureWrapper gPromptTexture;
+TTF_Font *gFont = NULL;
 
-//The music that will be played
-Mix_Music *gMusic = NULL;
-
-//The sound effects that will be used
-Mix_Chunk *gScratch = NULL;
-Mix_Chunk *gHigh = NULL;
-Mix_Chunk *gMedium = NULL;
-Mix_Chunk *gLow = NULL;
+// Scene Texture
+TextureWrapper gTimeTexture;
+TextureWrapper gFPSTexture;
 
 TextureWrapper::TextureWrapper()
 {
@@ -234,6 +258,107 @@ int TextureWrapper::getHeight()
     return height;
 }
 
+Timer::Timer()
+{
+    // Initialize the variables
+    startTicks = 0;
+    pausedTicks = 0;
+
+    paused = false;
+    started = false;
+}
+
+void Timer::start()
+{
+    // Start the timer
+    started = true;
+
+    // Unpaused the timer
+    paused = false;
+
+    // Get the current clock time
+    startTicks = SDL_GetTicks();
+    pausedTicks = 0;
+}
+
+void Timer::stop()
+{
+    // Stop the timer
+    started = false;
+
+    // Unpaused the timer
+    paused = false;
+
+    // Clear the tick variables
+    startTicks = 0;
+    pausedTicks = 0;
+}
+
+void Timer::pause()
+{
+    // If the timer is running and paused
+    if (started && !paused)
+    {
+        // Pause the timer
+        paused = true;
+
+        // Calculate the paused ticks
+        pausedTicks = SDL_GetTicks() - startTicks;
+        startTicks = 0;
+    }
+}
+
+void Timer::unpause()
+{
+    // If the timer is running and paused
+    if (started && paused)
+    {
+        // Unpause the timer
+        paused = false;
+
+        // Calculate the paused ticks
+        startTicks = SDL_GetTicks() - pausedTicks;
+
+        // Reset the paused ticks
+        pausedTicks = 0;
+    }
+}
+
+Uint32 Timer::getTicks()
+{
+    // The actual timer time
+    Uint32 time = 0;
+
+    // If the timer is running
+    if (started)
+    {
+        // If the timer is paused
+        if (paused)
+        {
+            // Return the number of ticks when the timer was paused
+            time = pausedTicks;
+        }
+        else
+        {
+            // Return the current time minus the start time
+            time = SDL_GetTicks() - startTicks;
+        }
+    }
+    return time;
+}
+
+bool Timer::isStarted()
+{
+    // Timer is running and paused or unpaused
+    return started;
+}
+
+bool Timer::isPaused()
+{
+    // Timer is running and paused
+    return paused && started;
+}
+
 bool init()
 {
     // Initialization flag
@@ -254,7 +379,7 @@ bool init()
         }
 
         // Create window
-        gWindow = SDL_CreateWindow("SDL Tutorial XXI", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
+        gWindow = SDL_CreateWindow("SDL Tutorial XXIV", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
 
         if (gWindow == NULL)
         {
@@ -283,10 +408,10 @@ bool init()
                     success = false;
                 }
 
-                // Initialize SDL_mixer
-                if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 2048) < 0)
+                // Initialize SDL_ttf
+                if (TTF_Init() == -1)
                 {
-                    printf("SDL_MIXER [FAILED] - %s\n");
+                    printf("SDL_TTF could not initialize! SDL_TTF Error: %s \n", TTF_GetError());
                 }
             }
         }
@@ -299,78 +424,47 @@ bool loadMedia()
     // Loading success flag
     bool success = true;
 
-    // Load sprites
-    if (!gPromptTexture.loadFromFile("images/prompt.png"))
+    // Open the font
+    gFont = TTF_OpenFont("fonts/gamefont.ttf", 14);
+
+    if (gFont == NULL)
     {
-        printf("SPRITE LOAD [FAILED]");
+        printf("LAZY LOAD [FAILED] - %s\n", TTF_GetError());
         success = false;
+    }
+    else
+    {
+        // Set Text color as black
+        SDL_Color textColor = {0, 0, 0, 255};
+        // Load prompt texture
+        if (!gFPSTexture.loadFromRenderedText("Jordan", textColor))
+        {
+            printf("TEXT RENDER [FAILED]\n");
+            success = false;
+        }
     }
 
-    // Load Music
-    gMusic = Mix_LoadMUS("audio/beat.wav");
-    if (gMusic == NULL)
-    {
-        printf("BEAT [FAILED] - %s\n", Mix_GetError());
-        success = false;
-    }
-
-    // Load sound effects
-    gScratch = Mix_LoadWAV("audio/scratch.wav");
-    if (gScratch == NULL)
-    {
-        printf("SCRATCH FAILED [FAILED] - %s\n", Mix_GetError());
-        success = false;
-    }
-
-    gHigh = Mix_LoadWAV("audio/high.wav");
-    if (gHigh == NULL)
-    {
-        printf("HIGH [FAILED] - %s\n");
-        success = false;
-    }
-    gMedium = Mix_LoadWAV("audio/medium.wav");
-    if (gMedium == NULL)
-    {
-        printf("MEDIUM [FAILED] - %s\n");
-        success = false;
-    }
-    gLow = Mix_LoadWAV("audio/low.wav");
-    if (gLow == NULL)
-    {
-        printf("LOW [FAILED] - %s\n");
-        success = false;
-    }
     return success;
 }
 
 void close()
 {
     // Free loaded images
-    gPromptTexture.free();
+    gTimeTexture.free();
+    gFPSTexture.free();
 
-    //Free the sound effects
-    Mix_FreeChunk(gScratch);
-    Mix_FreeChunk(gHigh);
-    Mix_FreeChunk(gMedium);
-    Mix_FreeChunk(gLow);
-    gScratch = NULL;
-    gHigh = NULL;
-    gMedium = NULL;
-    gLow = NULL;
-
-    //Free the music
-    Mix_FreeMusic(gMusic);
-    gMusic = NULL;
+    // Free Global Font
+    TTF_CloseFont(gFont);
+    gFont = NULL;
 
     // Destory window
     SDL_DestroyWindow(gWindow);
     SDL_DestroyRenderer(gRenderer);
-
     gRenderer = NULL;
     gWindow = NULL;
 
     // Quit SDL subsystems
-    Mix_Quit();
+    TTF_Quit();
     IMG_Quit();
     SDL_Quit();
 }
@@ -397,8 +491,18 @@ int main(int argc, char const *argv[])
             // Event Handler
             SDL_Event eventHandler;
 
-            // Current rendered texture
-            TextureWrapper *currentTexture = NULL;
+            // Set text color as black
+            SDL_Color textColor = {0, 0, 0, 255};
+
+            // The application timer
+            Timer fpsTimer;
+
+            // In memory text stream
+            stringstream timeText;
+
+            // Current time start time
+            Uint32 startTime = 0;
+            fpsTimer.start();
 
             // While application is running
             while (!quit)
@@ -412,73 +516,35 @@ int main(int argc, char const *argv[])
                     {
                         quit = true;
                     }
-                    //Handle key press
-                    else if (eventHandler.type == SDL_KEYDOWN)
-                    {
-                        switch (eventHandler.key.keysym.sym)
-                        {
-                        //Play high sound effect
-                        case SDLK_1:
-                            Mix_PlayChannel(-1, gHigh, 0);
-                            break;
+                }
 
-                        //Play medium sound effect
-                        case SDLK_2:
-                            Mix_PlayChannel(-1, gMedium, 0);
-                            break;
+                // Calculate and correct fps
+                float averageFPS = startTime / (fpsTimer.getTicks() / 1000.f);
+                if (averageFPS > 2000000)
+                {
+                    averageFPS = 0;
+                }
 
-                        //Play low sound effect
-                        case SDLK_3:
-                            Mix_PlayChannel(-1, gLow, 0);
-                            break;
+                // Set text to be rendered
+                timeText.str("");
+                timeText << "Average Frames Per Second " << averageFPS;
 
-                        //Play scratch sound effect
-                        case SDLK_4:
-                            Mix_PlayChannel(-1, gScratch, 0);
-                            break;
-
-                        case SDLK_9:
-                            //If there is no music playing
-                            if (Mix_PlayingMusic() == 0)
-                            {
-                                //Play the music
-                                Mix_PlayMusic(gMusic, -1);
-                            }
-                            //If music is being played
-                            else
-                            {
-                                //If the music is paused
-                                if (Mix_PausedMusic() == 1)
-                                {
-                                    //Resume the music
-                                    Mix_ResumeMusic();
-                                }
-                                //If the music is playing
-                                else
-                                {
-                                    //Pause the music
-                                    Mix_PauseMusic();
-                                }
-                            }
-                            break;
-
-                        case SDLK_0:
-                            //Stop the music
-                            Mix_HaltMusic();
-                            break;
-                        }
-                    }
+                //Render text
+                if (!gFPSTexture.loadFromRenderedText(timeText.str().c_str(), textColor))
+                {
+                    printf("Unable to render time texture!\n");
                 }
 
                 // Clear screen
                 SDL_SetRenderDrawColor(gRenderer, 0xFF, 0xFF, 0xFF, 0xFF);
                 SDL_RenderClear(gRenderer);
 
-                //Render prompt
-                gPromptTexture.render(0, 0);
+                //Render textures
+                gFPSTexture.render((SCREEN_WIDTH - gFPSTexture.getWidth()) / 2, 0);
 
-                // Update screen
+                //Update screen
                 SDL_RenderPresent(gRenderer);
+                startTime++;
             }
         }
     }
