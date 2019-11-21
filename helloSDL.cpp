@@ -72,6 +72,108 @@ private:
     bool started;
     bool paused;
 };
+class Dot
+{
+public:
+    //The dimensions of the dot
+    static const int DOT_WIDTH = 20;
+    static const int DOT_HEIGHT = 20;
+    // Maximum axis velocity of the dot
+    static const int DOT_VELOCITY = 10;
+    // Initializes the Variables
+    Dot();
+    // Takes keys presses and adjust the dot's velocity
+    void handleInput(SDL_Event &event);
+    // Move the Dot
+    void move();
+    // Draws the dot on the screen
+    void render();
+
+private:
+    // The X and Y offsets of the dot
+    int positionX, positionY;
+    // The Velocity of the dots
+    int velocityX, velocityY;
+};
+Dot::Dot()
+{
+    // Initialize the offsets
+    positionX = 0;
+    positionY = 0;
+    // Initialize the velocity
+    velocityX = 0;
+    velocityY = 0;
+}
+void Dot::handleInput(SDL_Event &event)
+{
+    // If a key was pressed
+    if (event.type == SDL_KEYDOWN && event.key.repeat == 0)
+    {
+        // Adjust the velocity
+        switch (event.key.keysym.sym)
+        {
+        case SDLK_UP:
+        case SDLK_w:
+            velocityY -= DOT_VELOCITY;
+            break;
+        case SDLK_DOWN:
+        case SDLK_s:
+            velocityY += DOT_VELOCITY;
+            break;
+        case SDLK_LEFT:
+        case SDLK_a:
+            velocityX -= DOT_VELOCITY;
+            break;
+        case SDLK_RIGHT:
+        case SDLK_d:
+            velocityX += DOT_VELOCITY;
+            break;
+        }
+    }
+    else if (event.type == SDL_KEYUP && event.key.repeat == 0)
+    {
+        //Adjust the velocity
+        switch (event.key.keysym.sym)
+        {
+        case SDLK_UP:
+        case SDLK_w:
+            velocityY += DOT_VELOCITY;
+            break;
+        case SDLK_DOWN:
+        case SDLK_s:
+            velocityY -= DOT_VELOCITY;
+            break;
+        case SDLK_LEFT:
+        case SDLK_a:
+            velocityX += DOT_VELOCITY;
+            break;
+        case SDLK_RIGHT:
+        case SDLK_d:
+            velocityX -= DOT_VELOCITY;
+            break;
+        }
+    }
+}
+void Dot::move()
+{
+    // Move the dot left or right
+    positionX += velocityX;
+    // If the dot went too far to the left or right
+    if ((positionX < 0) || (positionX + DOT_WIDTH > SCREEN_WIDTH))
+    {
+        // Move back
+        positionX -= velocityX;
+    }
+    // Move the dot up or down
+    positionY += velocityY;
+    // If the dot went too far to high or low
+    if ((positionY < 0) || (positionY + DOT_HEIGHT > SCREEN_WIDTH))
+    {
+        // Move back
+        positionY -= velocityY;
+    }
+}
+
 // Starts up SDL and create window
 bool init();
 // Load media
@@ -87,6 +189,12 @@ TTF_Font *gFont = NULL;
 // Scene Texture
 TextureWrapper gTimeTexture;
 TextureWrapper gFPSTexture;
+TextureWrapper gDotTexture;
+void Dot::render()
+{
+    // Draw the dot
+    gDotTexture.render(positionX, positionY);
+}
 TextureWrapper::TextureWrapper()
 {
     // Initialize
@@ -317,7 +425,7 @@ bool init()
             printf("Linear texturing filtering not enabled [WARNING]");
         }
         // Create window
-        gWindow = SDL_CreateWindow("SDL Tutorial XXIV", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
+        gWindow = SDL_CreateWindow("SDL Tutorial XXVI", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
         if (gWindow == NULL)
         {
             printf("WINDOW [FAILED] - %s\n", SDL_GetError());
@@ -358,22 +466,10 @@ bool loadMedia()
     // Loading success flag
     bool success = true;
     // Open the font
-    gFont = TTF_OpenFont("fonts/gamefont.ttf", 14);
-    if (gFont == NULL)
+    if (!gDotTexture.loadFromFile("images/dot.bmp"))
     {
-        printf("LAZY LOAD [FAILED] - %s\n", TTF_GetError());
-        success = false;
-    }
-    else
-    {
-        // Set Text color as black
-        SDL_Color textColor = {0, 0, 0, 255};
-        // Load prompt texture
-        if (!gFPSTexture.loadFromRenderedText("Jordan", textColor))
-        {
-            printf("TEXT RENDER [FAILED]\n");
-            success = false;
-        }
+        printf("DOT TEXTURE [FAILED]");
+        return false;
     }
     return success;
 }
@@ -415,21 +511,11 @@ int main(int argc, char const *argv[])
             bool quit = false;
             // Event Handler
             SDL_Event eventHandler;
-            // Set text color as black
-            SDL_Color textColor = {0, 0, 0, 255};
-            // The application timer
-            Timer fpsTimer;
-            // The Frames per second cap timer
-            Timer capTimer;
-            // In memory text stream
-            stringstream timeText;
-            // Current time start time
-            Uint32 countedFrames = 0;
-            fpsTimer.start();
+            // The dot that will be moving around on the screen
+            Dot dot;
             // While application is running
             while (!quit)
             {
-                capTimer.start();
                 // Handle events on queue
                 while (SDL_PollEvent(&eventHandler) != 0)
                 {
@@ -438,36 +524,19 @@ int main(int argc, char const *argv[])
                     {
                         quit = true;
                     }
+
+                    // Handle input for the dot
+                    dot.handleInput(eventHandler);
                 }
-                // Calculate and correct fps
-                float averageFPS = countedFrames / (fpsTimer.getTicks() / 1000.f);
-                if (averageFPS > 2000000)
-                {
-                    averageFPS = 0;
-                }
-                // Set text to be rendered
-                timeText.str("");
-                timeText << "Average Frames Per Second " << averageFPS;
-                //Render text
-                if (!gFPSTexture.loadFromRenderedText(timeText.str().c_str(), textColor))
-                {
-                    printf("Unable to render time texture!\n");
-                }
-                // Clear screen
+                // Move the dot
+                dot.move();
+                //Clear screen
                 SDL_SetRenderDrawColor(gRenderer, 0xFF, 0xFF, 0xFF, 0xFF);
                 SDL_RenderClear(gRenderer);
-                //Render textures
-                gFPSTexture.render((SCREEN_WIDTH - gFPSTexture.getWidth()) / 2, 0);
-                //Update screen
+                // Draw the dot
+                dot.render();
+                // Update screen
                 SDL_RenderPresent(gRenderer);
-                countedFrames++;
-                // If frame finished early
-                int frameTicks = capTimer.getTicks();
-                if (frameTicks < SCREEN_TICK_PER_FRAME)
-                {
-                    // Wait remaining Time
-                    SDL_Delay(SCREEN_TICK_PER_FRAME - frameTicks);
-                }
             }
         }
     }

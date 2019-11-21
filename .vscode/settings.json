@@ -1,7 +1,8 @@
 {
-    "terminal.integrated.fontFamily": "'Inconsolata'",
+    "terminal.integrated.fontFamily": "'Hermit'",
     "files.associations": {
         "cstdlib": "cpp",
-        "istream": "cpp"
+        "istream": "cpp",
+        "*.tcc": "cpp"
     }
 }
