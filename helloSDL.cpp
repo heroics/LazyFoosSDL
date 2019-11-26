@@ -46,32 +46,6 @@ private:
     int width;
     int height;
 };
-// The application time based timer
-class Timer
-{
-public:
-    // Initializes variables
-    Timer();
-    // Clock Actions
-    void start();
-    void stop();
-    void pause();
-    void unpause();
-    // Gets the timer's current time
-    Uint32 getTicks();
-    // Checks the status of the timer
-    bool isStarted();
-    bool isPaused();
-
-private:
-    // The clock time when started
-    Uint32 startTicks;
-    // The ticks stored when the time timer was paused
-    Uint32 pausedTicks;
-    // The timer status
-    bool started;
-    bool paused;
-};
 class Dot
 {
 public:
@@ -79,13 +53,13 @@ public:
     static const int DOT_WIDTH = 20;
     static const int DOT_HEIGHT = 20;
     // Maximum axis velocity of the dot
-    static const int DOT_VELOCITY = 10;
+    static const int DOT_VELOCITY = 1;
     // Initializes the Variables
     Dot();
     // Takes keys presses and adjust the dot's velocity
     void handleInput(SDL_Event &event);
     // Move the Dot
-    void move();
+    void move(SDL_Rect &wall);
     // Draws the dot on the screen
     void render();
 
@@ -94,6 +68,8 @@ private:
     int positionX, positionY;
     // The Velocity of the dots
     int velocityX, velocityY;
+    // Dot's collision Box
+    SDL_Rect collisionRect;
 };
 Dot::Dot()
 {
@@ -103,6 +79,9 @@ Dot::Dot()
     // Initialize the velocity
     velocityX = 0;
     velocityY = 0;
+    // Set collision box dimension
+    collisionRect.w = DOT_WIDTH;
+    collisionRect.h = DOT_HEIGHT;
 }
 void Dot::handleInput(SDL_Event &event)
 {
@@ -154,32 +133,38 @@ void Dot::handleInput(SDL_Event &event)
         }
     }
 }
-void Dot::move()
+// Box collision detector
+bool checkCollision(SDL_Rect a, SDL_Rect b);
+void Dot::move(SDL_Rect &wall)
 {
     // Move the dot left or right
     positionX += velocityX;
+    collisionRect.x = positionX;
     // If the dot went too far to the left or right
-    if ((positionX < 0) || (positionX + DOT_WIDTH > SCREEN_WIDTH))
+    if ((positionX < 0) || (positionX + DOT_WIDTH > SCREEN_WIDTH) || checkCollision(collisionRect, wall))
     {
         // Move back
         positionX -= velocityX;
+        collisionRect.x = positionX;
     }
     // Move the dot up or down
     positionY += velocityY;
+    collisionRect.y = positionY;
     // If the dot went too far to high or low
-    if ((positionY < 0) || (positionY + DOT_HEIGHT > SCREEN_WIDTH))
+    if ((positionY < 0) || (positionY + DOT_HEIGHT > SCREEN_HEIGHT) || checkCollision(collisionRect, wall))
     {
         // Move back
         positionY -= velocityY;
+        collisionRect.y = positionY;
     }
 }
-
 // Starts up SDL and create window
 bool init();
 // Load media
 bool loadMedia();
 // Frees Media and shuts down SDL
 void close();
+
 // Rendering Window
 SDL_Window *gWindow = NULL;
 // The Window Renderer
@@ -187,8 +172,6 @@ SDL_Renderer *gRenderer = NULL;
 //Scene texture
 TTF_Font *gFont = NULL;
 // Scene Texture
-TextureWrapper gTimeTexture;
-TextureWrapper gFPSTexture;
 TextureWrapper gDotTexture;
 void Dot::render()
 {
@@ -323,90 +306,6 @@ int TextureWrapper::getHeight()
 {
     return height;
 }
-Timer::Timer()
-{
-    // Initialize the variables
-    startTicks = 0;
-    pausedTicks = 0;
-    paused = false;
-    started = false;
-}
-void Timer::start()
-{
-    // Start the timer
-    started = true;
-    // Unpaused the timer
-    paused = false;
-    // Get the current clock time
-    startTicks = SDL_GetTicks();
-    pausedTicks = 0;
-}
-void Timer::stop()
-{
-    // Stop the timer
-    started = false;
-    // Unpaused the timer
-    paused = false;
-    // Clear the tick variables
-    startTicks = 0;
-    pausedTicks = 0;
-}
-void Timer::pause()
-{
-    // If the timer is running and paused
-    if (started && !paused)
-    {
-        // Pause the timer
-        paused = true;
-        // Calculate the paused ticks
-        pausedTicks = SDL_GetTicks() - startTicks;
-        startTicks = 0;
-    }
-}
-void Timer::unpause()
-{
-    // If the timer is running and paused
-    if (started && paused)
-    {
-        // Unpause the timer
-        paused = false;
-        // Calculate the paused ticks
-        startTicks = SDL_GetTicks() - pausedTicks;
-        // Reset the paused ticks
-        pausedTicks = 0;
-    }
-}
-Uint32 Timer::getTicks()
-{
-    // The actual timer time
-    Uint32 time = 0;
-    // If the timer is running
-    if (started)
-    {
-        // If the timer is paused
-        if (paused)
-        {
-            // Return the number of ticks when the timer was paused
-            time = pausedTicks;
-        }
-        else
-        {
-            // Return the current time minus the start time
-            time = SDL_GetTicks() - startTicks;
-        }
-    }
-    return time;
-}
-bool Timer::isStarted()
-{
-    // Timer is running and paused or unpaused
-    return started;
-}
-bool Timer::isPaused()
-{
-    // Timer is running and paused
-    return paused && started;
-}
 bool init()
 {
     // Initialization flag
@@ -425,7 +324,7 @@ bool init()
             printf("Linear texturing filtering not enabled [WARNING]");
         }
         // Create window
-        gWindow = SDL_CreateWindow("SDL Tutorial XXVI", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
+        gWindow = SDL_CreateWindow("SDL Tutorial XXVII", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
         if (gWindow == NULL)
         {
             printf("WINDOW [FAILED] - %s\n", SDL_GetError());
@@ -476,8 +375,6 @@ bool loadMedia()
 void close()
 {
     // Free loaded images
-    gTimeTexture.free();
-    gFPSTexture.free();
     // Free Global Font
     TTF_CloseFont(gFont);
     gFont = NULL;
@@ -490,6 +387,43 @@ void close()
     TTF_Quit();
     IMG_Quit();
     SDL_Quit();
+}
+bool checkCollision(SDL_Rect rectA, SDL_Rect rectB)
+{
+    // The sides of rectangles
+    int leftA, leftB;
+    int rightA, rightB;
+    int topA, topB;
+    int bottomA, bottomB;
+    // Calculate the sides of Rect A
+    leftA = rectA.x;
+    rightA = rectA.x + rectA.w;
+    topA = rectA.y;
+    bottomA = rectA.y + rectA.h;
+    // Calculate the sides of Rect B
+    leftB = rectB.x;
+    rightB = rectB.x + rectB.w;
+    topB = rectB.y;
+    bottomB = rectB.y + rectB.h;
+    // If any of the sides from A are outside of B
+    if (bottomA <= topB)
+    {
+        return false;
+    }
+    if (topA >= bottomB)
+    {
+        return false;
+    }
+    if (rightA <= leftB)
+    {
+        return false;
+    }
+    if (leftA >= rightB)
+    {
+        return false;
+    }
+    // if none of the sides from A are outside B
+    return true;
 }
 int main(int argc, char const *argv[])
 {
@@ -513,6 +447,12 @@ int main(int argc, char const *argv[])
             SDL_Event eventHandler;
             // The dot that will be moving around on the screen
             Dot dot;
+            // Set the wall
+            SDL_Rect wall;
+            wall.x = 300;
+            wall.y = 40;
+            wall.w = 40;
+            wall.h = 400;
             // While application is running
             while (!quit)
             {
@@ -524,15 +464,17 @@ int main(int argc, char const *argv[])
                     {
                         quit = true;
                     }
-
                     // Handle input for the dot
                     dot.handleInput(eventHandler);
                 }
                 // Move the dot
-                dot.move();
+                dot.move(wall);
                 //Clear screen
                 SDL_SetRenderDrawColor(gRenderer, 0xFF, 0xFF, 0xFF, 0xFF);
                 SDL_RenderClear(gRenderer);
+                // Render the wall
+                SDL_SetRenderDrawColor(gRenderer, 0x00, 0x00, 0x00, 0xFF);
+                SDL_RenderDrawRect(gRenderer, &wall);
                 // Draw the dot
                 dot.render();
                 // Update screen
