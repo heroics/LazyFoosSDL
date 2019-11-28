@@ -5,6 +5,7 @@
 #include <sstream>
 #include <stdio.h>
 #include <string>
+#include <vector>
 using namespace std;
 // Screen dimension contants
 const int SCREEN_WIDTH = 640;
@@ -53,35 +54,79 @@ public:
     static const int DOT_WIDTH = 20;
     static const int DOT_HEIGHT = 20;
     // Maximum axis velocity of the dot
-    static const int DOT_VELOCITY = 1;
+    static const double constexpr DOT_VELOCITY = .3f;
     // Initializes the Variables
-    Dot();
+    Dot(int x, int y);
     // Takes keys presses and adjust the dot's velocity
     void handleInput(SDL_Event &event);
     // Move the Dot
-    void move(SDL_Rect &wall);
+    void move(vector<SDL_Rect> &otherCollider);
     // Draws the dot on the screen
     void render();
+    // Gets the collision boxes
+    vector<SDL_Rect> &getColliders();
 
 private:
     // The X and Y offsets of the dot
-    int positionX, positionY;
+    double positionX, positionY;
     // The Velocity of the dots
-    int velocityX, velocityY;
-    // Dot's collision Box
-    SDL_Rect collisionRect;
+    float velocityX, velocityY;
+    // Move the collision boxes
+    vector<SDL_Rect> colliders;
+    // Moves the collision boxes relative to the dot's offset
+    void shiftColliders();
 };
-Dot::Dot()
+// Starts up SDL and create window
+bool init();
+// Load media
+bool loadMedia();
+// Frees Media and shuts down SDL
+void close();
+// Box set collision detector
+bool checkCollision(vector<SDL_Rect> &rectA, vector<SDL_Rect> &rectB);
+// Rendering Window
+SDL_Window *gWindow = NULL;
+// The Window Renderer
+SDL_Renderer *gRenderer = NULL;
+//Scene texture
+TTF_Font *gFont = NULL;
+// Scene Texture
+TextureWrapper gDotTexture;
+Dot::Dot(int x, int y)
 {
     // Initialize the offsets
-    positionX = 0;
-    positionY = 0;
+    positionX = x;
+    positionY = y;
     // Initialize the velocity
     velocityX = 0;
     velocityY = 0;
-    // Set collision box dimension
-    collisionRect.w = DOT_WIDTH;
-    collisionRect.h = DOT_HEIGHT;
+    // Create the nesscary SDL_Rects
+    colliders.resize(11);
+    //Initialize the collision boxes' width and height
+    colliders[0].w = 6;
+    colliders[0].h = 1;
+    colliders[1].w = 10;
+    colliders[1].h = 1;
+    colliders[2].w = 14;
+    colliders[2].h = 1;
+    colliders[3].w = 16;
+    colliders[3].h = 2;
+    colliders[4].w = 18;
+    colliders[4].h = 2;
+    colliders[5].w = 20;
+    colliders[5].h = 6;
+    colliders[6].w = 18;
+    colliders[6].h = 2;
+    colliders[7].w = 16;
+    colliders[7].h = 2;
+    colliders[8].w = 14;
+    colliders[8].h = 1;
+    colliders[9].w = 10;
+    colliders[9].h = 1;
+    colliders[10].w = 6;
+    colliders[10].h = 1;
+    // Initialize colliders relative to postion
+    shiftColliders();
 }
 void Dot::handleInput(SDL_Event &event)
 {
@@ -133,46 +178,79 @@ void Dot::handleInput(SDL_Event &event)
         }
     }
 }
-// Box collision detector
-bool checkCollision(SDL_Rect a, SDL_Rect b);
-void Dot::move(SDL_Rect &wall)
+void Dot::move(vector<SDL_Rect> &otherColliders)
 {
     // Move the dot left or right
     positionX += velocityX;
-    collisionRect.x = positionX;
+    shiftColliders();
     // If the dot went too far to the left or right
-    if ((positionX < 0) || (positionX + DOT_WIDTH > SCREEN_WIDTH) || checkCollision(collisionRect, wall))
+    if ((positionX < 0) || (positionX + DOT_WIDTH > SCREEN_WIDTH) || checkCollision(colliders, otherColliders))
     {
         // Move back
         positionX -= velocityX;
-        collisionRect.x = positionX;
+        shiftColliders();
     }
     // Move the dot up or down
     positionY += velocityY;
-    collisionRect.y = positionY;
+    shiftColliders();
     // If the dot went too far to high or low
-    if ((positionY < 0) || (positionY + DOT_HEIGHT > SCREEN_HEIGHT) || checkCollision(collisionRect, wall))
+    if ((positionY < 0) || (positionY + DOT_HEIGHT > SCREEN_HEIGHT) || checkCollision(colliders, otherColliders))
     {
         // Move back
         positionY -= velocityY;
-        collisionRect.y = positionY;
+        shiftColliders();
     }
 }
-// Starts up SDL and create window
-bool init();
-// Load media
-bool loadMedia();
-// Frees Media and shuts down SDL
-void close();
-
-// Rendering Window
-SDL_Window *gWindow = NULL;
-// The Window Renderer
-SDL_Renderer *gRenderer = NULL;
-//Scene texture
-TTF_Font *gFont = NULL;
-// Scene Texture
-TextureWrapper gDotTexture;
+void Dot::shiftColliders()
+{
+    // The row offset
+    int rowOffset = 0;
+    // Go Through the dot's collision boxes
+    for (int set = 0; set < colliders.size(); set++)
+    {
+        // Center the collision box
+        colliders[set].x = positionX + (DOT_WIDTH - colliders[set].w) / 2;
+        // Set the collision box at its row offset
+        colliders[set].y = positionY + rowOffset;
+        // Move the row offset down the height of the collision box
+        rowOffset += colliders[set].h;
+    }
+}
+vector<SDL_Rect> &Dot::getColliders()
+{
+    return colliders;
+}
+bool checkCollision(vector<SDL_Rect> &rectA, vector<SDL_Rect> &rectB)
+{
+    // The sides of the rectangles
+    int leftA, rightA, topA, bottomA;
+    int leftB, rightB, topB, bottomB;
+    // Go through the A boxes
+    for (int aBox = 0; aBox < rectA.size(); aBox++)
+    {
+        // Calculate the sides of rect A
+        leftA = rectA[aBox].x;
+        rightA = rectA[aBox].x + rectA[aBox].w;
+        topA = rectA[aBox].y;
+        bottomA = rectA[aBox].y + rectA[aBox].h;
+        // Calculate the sides of rect B
+        for (int bBox = 0; bBox < rectB.size(); bBox++)
+        {
+            leftB = rectB[bBox].x;
+            rightB = rectB[bBox].x + rectB[aBox].w;
+            topB = rectB[bBox].y;
+            bottomB = rectB[bBox].y + rectB[bBox].h;
+            // If no sides from A are outside B
+            if (((bottomA <= topB) || (topA >= bottomB) || (rightA <= leftB) || (leftA >= rightB)) == false)
+            {
+                // A collision is detected
+                return true;
+            }
+        }
+    }
+    // If neither set of collision boxes touched
+    return false;
+}
 void Dot::render()
 {
     // Draw the dot
@@ -324,7 +402,7 @@ bool init()
             printf("Linear texturing filtering not enabled [WARNING]");
         }
         // Create window
-        gWindow = SDL_CreateWindow("SDL Tutorial XXVII", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
+        gWindow = SDL_CreateWindow("SDL Tutorial XXVIII", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
         if (gWindow == NULL)
         {
             printf("WINDOW [FAILED] - %s\n", SDL_GetError());
@@ -446,13 +524,9 @@ int main(int argc, char const *argv[])
             // Event Handler
             SDL_Event eventHandler;
             // The dot that will be moving around on the screen
-            Dot dot;
-            // Set the wall
-            SDL_Rect wall;
-            wall.x = 300;
-            wall.y = 40;
-            wall.w = 40;
-            wall.h = 400;
+            Dot dot(0, 0);
+            // The dot that will be collided against
+            Dot otherDot(SCREEN_WIDTH / 4, SCREEN_HEIGHT / 4);
             // While application is running
             while (!quit)
             {
@@ -468,15 +542,13 @@ int main(int argc, char const *argv[])
                     dot.handleInput(eventHandler);
                 }
                 // Move the dot
-                dot.move(wall);
+                dot.move(otherDot.getColliders());
                 //Clear screen
                 SDL_SetRenderDrawColor(gRenderer, 0xFF, 0xFF, 0xFF, 0xFF);
                 SDL_RenderClear(gRenderer);
-                // Render the wall
-                SDL_SetRenderDrawColor(gRenderer, 0x00, 0x00, 0x00, 0xFF);
-                SDL_RenderDrawRect(gRenderer, &wall);
                 // Draw the dot
                 dot.render();
+                otherDot.render();
                 // Update screen
                 SDL_RenderPresent(gRenderer);
             }
