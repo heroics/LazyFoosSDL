@@ -12,6 +12,11 @@ const int SCREEN_WIDTH = 640;
 const int SCREEN_HEIGHT = 480;
 const int SCREEN_FPS = 60;
 const int SCREEN_TICK_PER_FRAME = 1000 / SCREEN_FPS;
+// A circle structure
+struct Circle
+{
+    int x, y, radius;
+};
 // Texture Wrapper Class
 class TextureWrapper
 {
@@ -35,7 +40,8 @@ public:
     // Set Alpha Modulation
     void setAlpha(Uint8 alpha);
     // Render texture at given point
-    void render(int x, int y, SDL_Rect *clip = NULL, double angle = 0.0, SDL_Point *center = NULL, SDL_RendererFlip flip = SDL_FLIP_NONE);
+    void render(int x, int y, SDL_Rect *clip = NULL, double angle = 0.0,
+                SDL_Point *center = NULL, SDL_RendererFlip flip = SDL_FLIP_NONE);
     // Get image dimensions
     int getWidth();
     int getHeight();
@@ -50,7 +56,7 @@ private:
 class Dot
 {
 public:
-    //The dimensions of the dot
+    // The dimensions of the dot
     static const int DOT_WIDTH = 20;
     static const int DOT_HEIGHT = 20;
     // Maximum axis velocity of the dot
@@ -60,11 +66,11 @@ public:
     // Takes keys presses and adjust the dot's velocity
     void handleInput(SDL_Event &event);
     // Move the Dot
-    void move(vector<SDL_Rect> &otherCollider);
+    void move(SDL_Rect &otherCollider, Circle &circle);
     // Draws the dot on the screen
     void render();
-    // Gets the collision boxes
-    vector<SDL_Rect> &getColliders();
+    // Gets the collision circle
+    Circle &getColliders();
 
 private:
     // The X and Y offsets of the dot
@@ -72,7 +78,7 @@ private:
     // The Velocity of the dots
     float velocityX, velocityY;
     // Move the collision boxes
-    vector<SDL_Rect> colliders;
+    Circle colliders;
     // Moves the collision boxes relative to the dot's offset
     void shiftColliders();
 };
@@ -82,13 +88,17 @@ bool init();
 bool loadMedia();
 // Frees Media and shuts down SDL
 void close();
-// Box set collision detector
-bool checkCollision(vector<SDL_Rect> &rectA, vector<SDL_Rect> &rectB);
+// Circle/Circle collision detector
+bool checkCollision(Circle &a, Circle &b);
+// Circle/Box collision detector
+bool checkCollision(Circle &a, SDL_Rect &b);
+// Calculates distance squared between two points
+double distanceSquared(int x1, int y1, int x2, int y2);
 // Rendering Window
 SDL_Window *gWindow = NULL;
 // The Window Renderer
 SDL_Renderer *gRenderer = NULL;
-//Scene texture
+// Scene texture
 TTF_Font *gFont = NULL;
 // Scene Texture
 TextureWrapper gDotTexture;
@@ -100,31 +110,8 @@ Dot::Dot(int x, int y)
     // Initialize the velocity
     velocityX = 0;
     velocityY = 0;
-    // Create the nesscary SDL_Rects
-    colliders.resize(11);
-    //Initialize the collision boxes' width and height
-    colliders[0].w = 6;
-    colliders[0].h = 1;
-    colliders[1].w = 10;
-    colliders[1].h = 1;
-    colliders[2].w = 14;
-    colliders[2].h = 1;
-    colliders[3].w = 16;
-    colliders[3].h = 2;
-    colliders[4].w = 18;
-    colliders[4].h = 2;
-    colliders[5].w = 20;
-    colliders[5].h = 6;
-    colliders[6].w = 18;
-    colliders[6].h = 2;
-    colliders[7].w = 16;
-    colliders[7].h = 2;
-    colliders[8].w = 14;
-    colliders[8].h = 1;
-    colliders[9].w = 10;
-    colliders[9].h = 1;
-    colliders[10].w = 6;
-    colliders[10].h = 1;
+    // Set collision circle size
+    colliders.radius = DOT_WIDTH / 2;
     // Initialize colliders relative to postion
     shiftColliders();
 }
@@ -156,7 +143,7 @@ void Dot::handleInput(SDL_Event &event)
     }
     else if (event.type == SDL_KEYUP && event.key.repeat == 0)
     {
-        //Adjust the velocity
+        // Adjust the velocity
         switch (event.key.keysym.sym)
         {
         case SDLK_UP:
@@ -178,13 +165,14 @@ void Dot::handleInput(SDL_Event &event)
         }
     }
 }
-void Dot::move(vector<SDL_Rect> &otherColliders)
+void Dot::move(SDL_Rect &square, Circle &circle)
 {
     // Move the dot left or right
     positionX += velocityX;
     shiftColliders();
     // If the dot went too far to the left or right
-    if ((positionX < 0) || (positionX + DOT_WIDTH > SCREEN_WIDTH) || checkCollision(colliders, otherColliders))
+    if ((positionX - colliders.radius < 0) || (positionX + colliders.radius > SCREEN_WIDTH) ||
+        checkCollision(colliders, square) || checkCollision(colliders, circle))
     {
         // Move back
         positionX -= velocityX;
@@ -194,7 +182,8 @@ void Dot::move(vector<SDL_Rect> &otherColliders)
     positionY += velocityY;
     shiftColliders();
     // If the dot went too far to high or low
-    if ((positionY < 0) || (positionY + DOT_HEIGHT > SCREEN_HEIGHT) || checkCollision(colliders, otherColliders))
+    if ((positionY - colliders.radius < 0) || (positionY + colliders.radius > SCREEN_HEIGHT) ||
+        checkCollision(colliders, square) || checkCollision(colliders, circle))
     {
         // Move back
         positionY -= velocityY;
@@ -203,58 +192,71 @@ void Dot::move(vector<SDL_Rect> &otherColliders)
 }
 void Dot::shiftColliders()
 {
-    // The row offset
-    int rowOffset = 0;
-    // Go Through the dot's collision boxes
-    for (int set = 0; set < colliders.size(); set++)
-    {
-        // Center the collision box
-        colliders[set].x = positionX + (DOT_WIDTH - colliders[set].w) / 2;
-        // Set the collision box at its row offset
-        colliders[set].y = positionY + rowOffset;
-        // Move the row offset down the height of the collision box
-        rowOffset += colliders[set].h;
-    }
+    colliders.x = positionX;
+    colliders.y = positionY;
 }
-vector<SDL_Rect> &Dot::getColliders()
+Circle &Dot::getColliders() { return colliders; }
+bool checkCollision(Circle &a, Circle &b)
 {
-    return colliders;
-}
-bool checkCollision(vector<SDL_Rect> &rectA, vector<SDL_Rect> &rectB)
-{
-    // The sides of the rectangles
-    int leftA, rightA, topA, bottomA;
-    int leftB, rightB, topB, bottomB;
-    // Go through the A boxes
-    for (int aBox = 0; aBox < rectA.size(); aBox++)
+    // Calculate total radius squared
+    int totalRadiusSquared = a.radius + b.radius;
+    totalRadiusSquared = totalRadiusSquared * totalRadiusSquared;
+    // If the distance between the centers of the circle is the less than sum of their radii
+    if (distanceSquared(a.x, a.y, b.x, b.y) < (totalRadiusSquared))
     {
-        // Calculate the sides of rect A
-        leftA = rectA[aBox].x;
-        rightA = rectA[aBox].x + rectA[aBox].w;
-        topA = rectA[aBox].y;
-        bottomA = rectA[aBox].y + rectA[aBox].h;
-        // Calculate the sides of rect B
-        for (int bBox = 0; bBox < rectB.size(); bBox++)
-        {
-            leftB = rectB[bBox].x;
-            rightB = rectB[bBox].x + rectB[aBox].w;
-            topB = rectB[bBox].y;
-            bottomB = rectB[bBox].y + rectB[bBox].h;
-            // If no sides from A are outside B
-            if (((bottomA <= topB) || (topA >= bottomB) || (rightA <= leftB) || (leftA >= rightB)) == false)
-            {
-                // A collision is detected
-                return true;
-            }
-        }
+        // The circle have collided
+        return true;
     }
     // If neither set of collision boxes touched
     return false;
 }
+bool checkCollision(Circle &a, SDL_Rect &b)
+{
+    // Closest point on collision box
+    int collisionX, collisionY;
+    // Find closest X offset
+    if (a.x < b.x)
+    {
+        collisionX = b.x;
+    }
+    else if (a.x > b.x + b.w)
+    {
+        collisionX = b.x + b.w;
+    }
+    else
+    {
+        collisionX = a.x;
+    }
+    // Find closet y offset
+    if (a.y < b.y)
+    {
+        collisionY = b.y;
+    }
+    else if (a.y > b.y + b.h)
+    {
+        collisionY = b.y + b.h;
+    }
+    else
+    {
+        collisionY = a.y;
+    }
+    // If the closest point inside the circle
+    if (distanceSquared(a.x, a.y, collisionX, collisionY) < (a.radius * a.radius))
+    {
+        return true;
+    }
+    return false;
+}
+double distanceSquared(int x1, int y1, int x2, int y2)
+{
+    int deltaX = x2 - x1;
+    int deltaY = y2 - y1;
+    return (deltaX * deltaX) + (deltaY * deltaY);
+}
 void Dot::render()
 {
     // Draw the dot
-    gDotTexture.render(positionX, positionY);
+    gDotTexture.render(positionX - colliders.radius, positionY - colliders.radius);
 }
 TextureWrapper::TextureWrapper()
 {
@@ -283,12 +285,14 @@ bool TextureWrapper::loadFromFile(string path)
     else
     {
         // Color key image
-        SDL_SetColorKey(loadedSuface, SDL_TRUE, SDL_MapRGB(loadedSuface->format, 0, 0xFF, 0xFF));
+        SDL_SetColorKey(loadedSuface, SDL_TRUE,
+                        SDL_MapRGB(loadedSuface->format, 0, 0xFF, 0xFF));
         // Create texture from surface pixels
         newTexture = SDL_CreateTextureFromSurface(gRenderer, loadedSuface);
         if (newTexture == NULL)
         {
-            printf("TEXTURE WRAPPER LOAD IMAGE [FAILED] - %s | SDL_IMAGE ERROR: %s\n", path.c_str(), IMG_GetError());
+            printf("TEXTURE WRAPPER LOAD IMAGE [FAILED] - %s | SDL_IMAGE ERROR: %s\n",
+                   path.c_str(), IMG_GetError());
         }
         else
         {
@@ -304,12 +308,14 @@ bool TextureWrapper::loadFromFile(string path)
     return texture != NULL;
 }
 #if defined(_SDL_TTF_H) || defined(SDL_TTF_H)
-bool TextureWrapper::loadFromRenderedText(string textureText, SDL_Color textColor)
+bool TextureWrapper::loadFromRenderedText(string textureText,
+                                          SDL_Color textColor)
 {
     // Get red of preexisting texture
     free();
     // Render text surface
-    SDL_Surface *textSurface = TTF_RenderText_Blended(gFont, textureText.c_str(), textColor);
+    SDL_Surface *textSurface =
+        TTF_RenderText_Blended(gFont, textureText.c_str(), textColor);
     if (textSurface == NULL)
     {
         printf("Render Text Surface [FAILED] - %s\n", TTF_GetError());
@@ -352,21 +358,18 @@ void TextureWrapper::setColor(Uint8 red, Uint8 green, Uint8 blue)
 }
 void TextureWrapper::setBlendMode(SDL_BlendMode blending)
 {
-    //Set blending function
+    // Set blending function
     SDL_SetTextureBlendMode(texture, blending);
 }
 void TextureWrapper::setAlpha(Uint8 alpha)
 {
     SDL_SetTextureAlphaMod(texture, alpha);
 }
-void TextureWrapper::render(int x, int y, SDL_Rect *clip, double angle, SDL_Point *center, SDL_RendererFlip rendererFlip)
+void TextureWrapper::render(int x, int y, SDL_Rect *clip, double angle,
+                            SDL_Point *center, SDL_RendererFlip rendererFlip)
 {
     // Set Rendering space and render to screen
-    SDL_Rect renderQuad = {
-        x,
-        y,
-        width,
-        height};
+    SDL_Rect renderQuad = {x, y, width, height};
     // Set clip rendering dimension
     if (clip != NULL)
     {
@@ -374,16 +377,11 @@ void TextureWrapper::render(int x, int y, SDL_Rect *clip, double angle, SDL_Poin
         renderQuad.h = clip->h;
     }
     // Render to screen
-    SDL_RenderCopyEx(gRenderer, texture, clip, &renderQuad, angle, center, rendererFlip);
+    SDL_RenderCopyEx(gRenderer, texture, clip, &renderQuad, angle, center,
+                     rendererFlip);
 }
-int TextureWrapper::getWidth()
-{
-    return width;
-}
-int TextureWrapper::getHeight()
-{
-    return height;
-}
+int TextureWrapper::getWidth() { return width; }
+int TextureWrapper::getHeight() { return height; }
 bool init()
 {
     // Initialization flag
@@ -402,7 +400,7 @@ bool init()
             printf("Linear texturing filtering not enabled [WARNING]");
         }
         // Create window
-        gWindow = SDL_CreateWindow("SDL Tutorial XXVIII", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
+        gWindow = SDL_CreateWindow("SDL Tutorial XXX", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
         if (gWindow == NULL)
         {
             printf("WINDOW [FAILED] - %s\n", SDL_GetError());
@@ -419,9 +417,9 @@ bool init()
             }
             else
             {
-                //Initialize renderer color
+                // Initialize renderer color
                 SDL_SetRenderDrawColor(gRenderer, 0xFF, 0xFF, 0xFF, 0xFF);
-                //Initialize PNG loading
+                // Initialize PNG loading
                 int imgFlags = IMG_INIT_PNG;
                 if (!(IMG_Init(imgFlags) & imgFlags))
                 {
@@ -431,7 +429,8 @@ bool init()
                 // Initialize SDL_ttf
                 if (TTF_Init() == -1)
                 {
-                    printf("SDL_TTF could not initialize! SDL_TTF Error: %s \n", TTF_GetError());
+                    printf("SDL_TTF could not initialize! SDL_TTF Error: %s \n",
+                           TTF_GetError());
                 }
             }
         }
@@ -524,16 +523,22 @@ int main(int argc, char const *argv[])
             // Event Handler
             SDL_Event eventHandler;
             // The dot that will be moving around on the screen
-            Dot dot(0, 0);
+            Dot dot(Dot::DOT_WIDTH / 2, Dot::DOT_HEIGHT / 2);
             // The dot that will be collided against
             Dot otherDot(SCREEN_WIDTH / 4, SCREEN_HEIGHT / 4);
+            //Set the wall
+            SDL_Rect wall;
+            wall.x = 300;
+            wall.y = 40;
+            wall.w = 40;
+            wall.h = 400;
             // While application is running
             while (!quit)
             {
                 // Handle events on queue
                 while (SDL_PollEvent(&eventHandler) != 0)
                 {
-                    //User requests quit
+                    // User requests quit
                     if (eventHandler.type == SDL_QUIT)
                     {
                         quit = true;
@@ -542,10 +547,13 @@ int main(int argc, char const *argv[])
                     dot.handleInput(eventHandler);
                 }
                 // Move the dot
-                dot.move(otherDot.getColliders());
-                //Clear screen
+                dot.move(wall, otherDot.getColliders());
+                // Clear screen
                 SDL_SetRenderDrawColor(gRenderer, 0xFF, 0xFF, 0xFF, 0xFF);
                 SDL_RenderClear(gRenderer);
+                // Render wall
+                SDL_SetRenderDrawColor(gRenderer, 0x00, 0x00, 0x00, 0xFF);
+                SDL_RenderDrawRect(gRenderer, &wall);
                 // Draw the dot
                 dot.render();
                 otherDot.render();
