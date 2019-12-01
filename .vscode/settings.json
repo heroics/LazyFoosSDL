@@ -3,6 +3,7 @@
     "files.associations": {
         "cstdlib": "cpp",
         "istream": "cpp",
-        "*.tcc": "cpp"
+        "*.tcc": "cpp",
+        "string": "cpp"
     }
 }
