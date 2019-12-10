@@ -20,7 +20,8 @@ public:
     void setColor(Uint8 red, Uint8 green, Uint8 blue);
     void setBlendMode(SDL_BlendMode blending);
     void setAlpha(Uint8 alpha);
-    void render(int x, int y, SDL_Rect *clip = NULL, double angle = 0.0, SDL_Point *center = NULL, SDL_RendererFlip flip = SDL_FLIP_NONE);
+    void render(int x, int y, SDL_Rect *clip = NULL, double angle = 0.0,
+                SDL_Point *center = NULL, SDL_RendererFlip flip = SDL_FLIP_NONE);
     int getWidth();
     int getHeight();
 
@@ -38,9 +39,7 @@ public:
     Dot();
     void handleInput(SDL_Event &event);
     void move();
-    void render(int cameraX, int cameraY);
-    int getPosX();
-    int getPosY();
+    void render();
 
 private:
     int positionX, positionY;
@@ -52,17 +51,14 @@ void close();
 SDL_Window *gWindow = NULL;
 SDL_Renderer *gRenderer = NULL;
 TextureWrapper gDotTexture;
-TextureWrapper gBGTexture;
+TextureWrapper gBackgroundTexture;
 TextureWrapper::TextureWrapper()
 {
     texture = NULL;
     width = 0;
     height = 0;
 }
-TextureWrapper::~TextureWrapper()
-{
-    free();
-}
+TextureWrapper::~TextureWrapper() { free(); }
 bool TextureWrapper::loadFromFile(string path)
 {
     free();
@@ -74,12 +70,12 @@ bool TextureWrapper::loadFromFile(string path)
     }
     else
     {
-        SDL_SetColorKey(loadedSurface, SDL_TRUE, SDL_MapRGB(loadedSurface->format, 0, 0xFF, 0xFF));
+        SDL_SetColorKey(loadedSurface, SDL_TRUE,
+                        SDL_MapRGB(loadedSurface->format, 0, 0xFF, 0xFF));
         newTexture = SDL_CreateTextureFromSurface(gRenderer, loadedSurface);
         if (newTexture == NULL)
         {
-            printf("TEXTURE WRAPPER LOAD IMAGE [FAILED] - %s | SDL_IMAGE ERROR: %s\n",
-                   path.c_str(), IMG_GetError());
+            printf("TEXTURE WRAPPER LOAD IMAGE [FAILED] - %s | SDL_IMAGE ERROR: %s\n", path.c_str(), IMG_GetError());
         }
         else
         {
@@ -95,13 +91,15 @@ bool TextureWrapper::loadFromFile(string path)
 bool TextureWrapper::loadFromRenderedText(string textureText, SDL_Color textColor)
 {
     free();
-    SDL_Surface *textSurface = TTF_RenderText_Solid(gFont, textureText.c_str(), textColor);
+    SDL_Surface *textSurface =
+        TTF_RenderText_Solid(gFont, textureText.c_str(), textColor);
     if (textSurface != NULL)
     {
         texture = SDL_CreateTextureFromSurface(gRenderer, textSurface);
         if (texture == NULL)
         {
-            printf("Unable to create texture from rendered text! SDL Error: %s\n", SDL_GetError());
+            printf("Unable to create texture from rendered text! SDL Error: %s\n",
+                   SDL_GetError());
         }
         else
         {
@@ -112,7 +110,8 @@ bool TextureWrapper::loadFromRenderedText(string textureText, SDL_Color textColo
     }
     else
     {
-        printf("Unable to render text surface! SDL_ttf Error: %s\n", TTF_GetError());
+        printf("Unable to render text surface! SDL_ttf Error: %s\n",
+               TTF_GetError());
     }
     return texture != NULL;
 }
@@ -139,7 +138,8 @@ void TextureWrapper::setAlpha(Uint8 alpha)
 {
     SDL_SetTextureAlphaMod(texture, alpha);
 }
-void TextureWrapper::render(int x, int y, SDL_Rect *clip, double angle, SDL_Point *center, SDL_RendererFlip rendererFlip)
+void TextureWrapper::render(int x, int y, SDL_Rect *clip, double angle,
+                            SDL_Point *center, SDL_RendererFlip rendererFlip)
 {
     SDL_Rect renderQuad = {x, y, width, height};
     if (clip != NULL)
@@ -147,7 +147,8 @@ void TextureWrapper::render(int x, int y, SDL_Rect *clip, double angle, SDL_Poin
         renderQuad.w = clip->w;
         renderQuad.h = clip->h;
     }
-    SDL_RenderCopyEx(gRenderer, texture, clip, &renderQuad, angle, center, rendererFlip);
+    SDL_RenderCopyEx(gRenderer, texture, clip, &renderQuad, angle, center,
+                     rendererFlip);
 }
 int TextureWrapper::getWidth() { return width; }
 int TextureWrapper::getHeight() { return height; }
@@ -218,18 +219,11 @@ void Dot::move()
         positionY -= velocityY;
     }
 }
-void Dot::render(int cameraX, int cameraY)
+void Dot::render()
 {
-    gDotTexture.render(positionX - cameraX, positionY - cameraY);
+    gDotTexture.render(positionX, positionY);
 }
-int Dot::getPosX()
-{
-    return positionX;
-}
-int Dot::getPosY()
-{
-    return positionY;
-}
+
 bool init()
 {
     bool success = true;
@@ -244,7 +238,7 @@ bool init()
         {
             printf("Linear texturing filtering not enabled [WARNING]");
         }
-        gWindow = SDL_CreateWindow("SDL Tutorial XXX", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
+        gWindow = SDL_CreateWindow("SDL Tutorial XXXI", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
         if (gWindow == NULL)
         {
             printf("WINDOW [FAILED] - %s\n", SDL_GetError());
@@ -252,7 +246,8 @@ bool init()
         }
         else
         {
-            gRenderer = SDL_CreateRenderer(gWindow, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+            gRenderer = SDL_CreateRenderer(
+                gWindow, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
             if (gRenderer == NULL)
             {
                 printf("SDL_IMAGE [FAILED] - %s\n", IMG_GetError());
@@ -280,7 +275,7 @@ bool loadMedia()
         printf("DOT TEXTURE [FAILED]");
         success = false;
     }
-    if (!gBGTexture.loadFromFile("images/bg.png"))
+    if (!gBackgroundTexture.loadFromFile("images/bg.png"))
     {
         printf("Failed to load background texture!\n");
         success = false;
@@ -290,7 +285,7 @@ bool loadMedia()
 void close()
 {
     gDotTexture.free();
-    gBGTexture.free();
+    gBackgroundTexture.free();
     SDL_DestroyRenderer(gRenderer);
     SDL_DestroyWindow(gWindow);
     gWindow = NULL;
@@ -315,7 +310,7 @@ int main(int argc, char const *args[])
             bool quit = false;
             SDL_Event eventHandler;
             Dot dot;
-            SDL_Rect camera = {0, 0, SCREEN_WIDTH, SCREEN_HEIGHT};
+            int scrollingOffset = 0;
             while (!quit)
             {
                 while (SDL_PollEvent(&eventHandler) != 0)
@@ -327,28 +322,16 @@ int main(int argc, char const *args[])
                     dot.handleInput(eventHandler);
                 }
                 dot.move();
-                camera.x = (dot.getPosX() + Dot::DOT_WIDTH / 2) - SCREEN_WIDTH / 2;
-                camera.y = (dot.getPosY() + Dot::DOT_HEIGHT / 2) - SCREEN_HEIGHT / 2;
-                if (camera.x < 0)
+                scrollingOffset--;
+                if (scrollingOffset < -gBackgroundTexture.getWidth())
                 {
-                    camera.x = 0;
-                }
-                if (camera.y < 0)
-                {
-                    camera.y = 0;
-                }
-                if (camera.x > LEVEL_WIDTH - camera.w)
-                {
-                    camera.x = LEVEL_WIDTH - camera.w;
-                }
-                if (camera.y > LEVEL_HEIGHT - camera.h)
-                {
-                    camera.y = LEVEL_HEIGHT - camera.h;
+                    scrollingOffset = 0;
                 }
                 SDL_SetRenderDrawColor(gRenderer, 0xFF, 0xFF, 0xFF, 0xFF);
                 SDL_RenderClear(gRenderer);
-                gBGTexture.render(0, 0, &camera);
-                dot.render(camera.x, camera.y);
+                gBackgroundTexture.render(scrollingOffset, 0);
+                gBackgroundTexture.render(scrollingOffset + gBackgroundTexture.getWidth(), 0);
+                dot.render();
                 SDL_RenderPresent(gRenderer);
             }
         }
