@@ -1,10 +1,10 @@
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
+#include <SDL2/SDL_ttf.h>
+#include <sstream>
 #include <stdio.h>
 #include <string>
 using namespace std;
-const int LEVEL_WIDTH = 1280;
-const int LEVEL_HEIGHT = 960;
 const int SCREEN_WIDTH = 640;
 const int SCREEN_HEIGHT = 480;
 class TextureWrapper
@@ -50,8 +50,9 @@ bool loadMedia();
 void close();
 SDL_Window *gWindow = NULL;
 SDL_Renderer *gRenderer = NULL;
-TextureWrapper gDotTexture;
-TextureWrapper gBackgroundTexture;
+TTF_Font *gFont = NULL;
+TextureWrapper gPromptTextTexture;
+TextureWrapper gInputTextTexture;
 TextureWrapper::TextureWrapper()
 {
     texture = NULL;
@@ -152,77 +153,6 @@ void TextureWrapper::render(int x, int y, SDL_Rect *clip, double angle,
 }
 int TextureWrapper::getWidth() { return width; }
 int TextureWrapper::getHeight() { return height; }
-Dot::Dot()
-{
-    positionX = 0;
-    positionY = 0;
-    velocityX = 0;
-    velocityY = 0;
-}
-void Dot::handleInput(SDL_Event &event)
-{
-    if (event.type == SDL_KEYDOWN && event.key.repeat == 0)
-    {
-        switch (event.key.keysym.sym)
-        {
-        case SDLK_UP:
-        case SDLK_w:
-            velocityY -= DOT_VELOCITY;
-            break;
-        case SDLK_DOWN:
-        case SDLK_s:
-            velocityY += DOT_VELOCITY;
-            break;
-        case SDLK_LEFT:
-        case SDLK_a:
-            velocityX -= DOT_VELOCITY;
-            break;
-        case SDLK_RIGHT:
-        case SDLK_d:
-            velocityX += DOT_VELOCITY;
-            break;
-        }
-    }
-    else if (event.type == SDL_KEYUP && event.key.repeat == 0)
-    {
-        switch (event.key.keysym.sym)
-        {
-        case SDLK_UP:
-        case SDLK_w:
-            velocityY += DOT_VELOCITY;
-            break;
-        case SDLK_DOWN:
-        case SDLK_s:
-            velocityY -= DOT_VELOCITY;
-            break;
-        case SDLK_LEFT:
-        case SDLK_a:
-            velocityX += DOT_VELOCITY;
-            break;
-        case SDLK_RIGHT:
-        case SDLK_d:
-            velocityX -= DOT_VELOCITY;
-            break;
-        }
-    }
-}
-void Dot::move()
-{
-    positionX += velocityX;
-    if ((positionX < 0) || (positionX + DOT_WIDTH > LEVEL_WIDTH))
-    {
-        positionX -= velocityX;
-    }
-    positionY += velocityY;
-    if ((positionY < 0) || (positionY + DOT_HEIGHT > LEVEL_HEIGHT))
-    {
-        positionY -= velocityY;
-    }
-}
-void Dot::render()
-{
-    gDotTexture.render(positionX, positionY);
-}
 
 bool init()
 {
@@ -259,33 +189,42 @@ bool init()
                 int imgFlags = IMG_INIT_PNG;
                 if (!(IMG_Init(imgFlags) & imgFlags))
                 {
-                    printf("SDL_image [FAILED] - %s\n", IMG_GetError());
+                    printf("SDL_Image [FAILED] - %s\n", IMG_GetError());
+                    success = false;
+                }
+                if (TTF_Init() == -1)
+                {
+                    printf("SDL_TTF [FAILED] - %s\n", TTF_GetError());
                     success = false;
                 }
             }
         }
+        return success;
     }
-    return success;
 }
 bool loadMedia()
 {
     bool success = true;
-    if (!gDotTexture.loadFromFile("images/dot.bmp"))
+    gFont = TTF_OpenFont("fonts/gamefont.ttf", 28);
+    if (gFont == NULL)
     {
-        printf("DOT TEXTURE [FAILED]");
+        printf("Failed to load game font! SDL_ttf Error: %s\n", TTF_GetError());
         success = false;
     }
-    if (!gBackgroundTexture.loadFromFile("images/bg.png"))
+    else
     {
-        printf("Failed to load background texture!\n");
-        success = false;
+        //Render the prompt
+        SDL_Color textColor = {0, 0, 0, 0xFF};
+        if (!gPromptTextTexture.loadFromRenderedText("Enter Text:", textColor))
+        {
+            printf("Failed to render prompt text!\n");
+            success = false;
+        }
     }
     return success;
 }
 void close()
 {
-    gDotTexture.free();
-    gBackgroundTexture.free();
     SDL_DestroyRenderer(gRenderer);
     SDL_DestroyWindow(gWindow);
     gWindow = NULL;
@@ -309,31 +248,65 @@ int main(int argc, char const *args[])
         {
             bool quit = false;
             SDL_Event eventHandler;
-            Dot dot;
-            int scrollingOffset = 0;
+            SDL_Color textColor = {0, 355, 0, 0xFF};
+
+            string inputText = "Name this dream";
+            gInputTextTexture.loadFromRenderedText(inputText.c_str(), textColor);
+            SDL_StartTextInput();
             while (!quit)
             {
+                bool renderText = false;
                 while (SDL_PollEvent(&eventHandler) != 0)
                 {
                     if (eventHandler.type == SDL_QUIT)
                     {
                         quit = true;
                     }
-                    dot.handleInput(eventHandler);
+                    else if (eventHandler.type == SDL_KEYDOWN)
+                    {
+                        if (eventHandler.key.keysym.sym == SDLK_BACKSPACE && inputText.length() > 0)
+                        {
+                            inputText.pop_back();
+                            renderText = true;
+                        }
+                        else if (eventHandler.key.keysym.sym == SDLK_c && SDL_GetModState() & KMOD_CTRL)
+                        {
+                            SDL_SetClipboardText(inputText.c_str());
+                        }
+                        else if (eventHandler.key.keysym.sym == SDLK_v && SDL_GetModState() & KMOD_CTRL)
+                        {
+                            inputText = SDL_GetClipboardText();
+                            renderText = true;
+                        }
+                    }
+                    else if (eventHandler.type == SDL_TEXTINPUT)
+                    {
+                        if (!(SDL_GetModState() & KMOD_CTRL && (eventHandler.text.text[0] == 'c' || eventHandler.text.text[0] == 'v' || eventHandler.text.text[0] == 'C' || eventHandler.text.text[0] == 'V')))
+                        {
+                            inputText += eventHandler.text.text;
+                            renderText = true;
+                        }
+                    }
                 }
-                dot.move();
-                scrollingOffset--;
-                if (scrollingOffset < -gBackgroundTexture.getWidth())
+                if (renderText)
                 {
-                    scrollingOffset = 0;
+                    if (inputText != "")
+                    {
+                        gInputTextTexture.loadFromRenderedText(inputText.c_str(), textColor);
+                    }
+                    else
+                    {
+                        gInputTextTexture.loadFromRenderedText(" ", textColor);
+                    }
                 }
+
                 SDL_SetRenderDrawColor(gRenderer, 0xFF, 0xFF, 0xFF, 0xFF);
                 SDL_RenderClear(gRenderer);
-                gBackgroundTexture.render(scrollingOffset, 0);
-                gBackgroundTexture.render(scrollingOffset + gBackgroundTexture.getWidth(), 0);
-                dot.render();
+                gPromptTextTexture.render((SCREEN_WIDTH - gPromptTextTexture.getWidth()) / 2, 0);
+                gInputTextTexture.render((SCREEN_WIDTH - gInputTextTexture.getWidth()) / 2, gPromptTextTexture.getHeight());
                 SDL_RenderPresent(gRenderer);
             }
+            SDL_StopTextInput();
         }
     }
     close();
