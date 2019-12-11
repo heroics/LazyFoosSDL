@@ -168,7 +168,7 @@ bool init()
         {
             printf("Linear texturing filtering not enabled [WARNING]");
         }
-        gWindow = SDL_CreateWindow("SDL Tutorial XXXI", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
+        gWindow = SDL_CreateWindow("SDL Tutorial XXXII", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, SCREEN_WIDTH, SCREEN_HEIGHT, SDL_WINDOW_SHOWN);
         if (gWindow == NULL)
         {
             printf("WINDOW [FAILED] - %s\n", SDL_GetError());
